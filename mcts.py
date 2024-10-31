@@ -12,7 +12,7 @@ from tensorflow.keras.callbacks import EarlyStopping
 import json
 
 class MCTSAgent():
-    def __init__(self, state_size, c_puct=10.0, n_simulations=100):
+    def __init__(self, state_size, c_puct=1000000.0, n_simulations=100):
         self.state_size = state_size
         self.c_puct = c_puct
         self.memory = deque(maxlen=10000)
@@ -22,7 +22,7 @@ class MCTSAgent():
         self.epsilon = 1
         self.epsilon_decay = 0.9998
         self.epsilon_min = 0.1
-        self.learning_rate = 0.1
+        self.learning_rate = 0.001
         self.model = self._build_model()
         self.target_model = self._build_model()
         self.update_target_model()
@@ -59,7 +59,7 @@ class MCTSAgent():
 
         # Create the model with both policy and value heads
         model = models.Model(inputs=input_layer, outputs=[policy_output, value_output])
-        model.compile(optimizer='adam', loss=['categorical_crossentropy', 'mean_squared_error'])
+        model.compile(optimizer='adam', loss=['categorical_crossentropy', 'mean_squared_error'], metrics=['accuracy','accuracy'])
 
         return model
 
@@ -94,13 +94,9 @@ class MCTSAgent():
 
     def act(self, fen):
         root = MCTSNode(chess.Board(fen), agent=self)
-        print("start")
-
         self.simulate(root, self.n_simulations)
-        print("end")
 
         # Use UCB1 to select the best move (explore-exploit tradeoff)
-        total_simulations = sum(child.visits for child in root.children.values())
         best_move = root.best_child(self.c_puct).move
         print(best_move)
 
@@ -111,6 +107,7 @@ class MCTSAgent():
         env = RookKingEnv()
         env.board = node.board.copy()  # Set env's state to node's board state
         policy = self.model.predict(np.expand_dims(self.get_state(env.board), axis=0), verbose=0)[0][0]
+        print(np.shape(policy))
 
         # Selection and Expansion
         while node.is_fully_expanded():
@@ -135,7 +132,7 @@ class MCTSAgent():
 
             while not done :
                 # Ensure the child represents a valid move
-                best_move = child.move  # Assuming the child node stores its corresponding move
+                best_move = child.move  
                 
                 # Take the move in the environment
                 next_state, reward, done = env.step(best_move)
@@ -165,26 +162,6 @@ class MCTSAgent():
                     parent = parent.parent
 
 
-    def ucb_score(self,child, total_simulations, exploration_weight=0.05):
-        # UCB1 formula
-        if child.visits == 0:
-            return float('inf')  # Prioritize unexplored nodes
-        exploitation = child.value / child.visits
-        exploration = exploration_weight * math.sqrt(math.log(total_simulations) / child.visits)
-        return exploitation + exploration
-
-    def boltzmann_exploration(self, legal_moves, predictions, temperature=1.0):
-        # Extract probabilities for legal moves and apply temperature
-        legal_move_probs = [predictions[self.move_mapping[str(move)]] for move in legal_moves]
-        legal_move_probs = np.array(legal_move_probs) / temperature
-
-        # Convert to probabilities using softmax
-        exp_probs = np.exp(legal_move_probs - np.max(legal_move_probs))  # For numerical stability
-        move_probs = exp_probs / np.sum(exp_probs)
-
-        # Sample a move based on the probabilities
-        move_idx = np.random.choice(range(len(legal_moves)), p=move_probs)
-        return legal_moves[move_idx]
 
 
     def remember(self, state, action, reward, next_state,fen, done):
@@ -192,7 +169,7 @@ class MCTSAgent():
 
     def replay(self, batch_size):
         if len(self.memory) < batch_size:
-            print(len(self.memory))
+            print(len(self.memory), "memory")
             return
         print("Replaying...")
 
@@ -208,9 +185,6 @@ class MCTSAgent():
 
         # Update Q-values for actions taken
         for i, (state, action, reward, next_state, fen, done) in enumerate(minibatch):
-            board = chess.Board(fen)
-            legal_moves = list(board.legal_moves)
-
             # Extract the action index
             move_idx = self.move_mapping[action.uci()]
 
@@ -219,18 +193,19 @@ class MCTSAgent():
                 target_value = reward
             else:
                 # Get maximum value from future states
-                max_future_value = np.max(future_value[i])  # This will return the value head's output for future states
+                max_future_value = np.max(future_value[i])
                 target_value = reward + self.gamma * max_future_value
 
             # Update the value output for the action taken
             current_value[i] = target_value
-            current_policy[i][move_idx] = target_value
+            
+            # Update the policy with a one-hot vector for the action taken
+            target_policy = np.zeros_like(current_policy[i])  # Create zero vector for target policy
+            target_policy[move_idx] = 1  # Set the action taken to 1
+            current_policy[i] = target_policy  # Update current policy
 
-        opt = Adam(learning_rate=self.learning_rate)
-        self.model.compile(optimizer=opt, loss='mse', metrics=['accuracy','accuracy'])
-        self.model.fit(states, [current_policy, current_value], epochs=50,batch_size=1024)
-        if self.epsilon > self.epsilon_min:
-            self.epsilon *= self.epsilon_decay
+        self.model.fit(states, [current_policy, current_value], epochs=10, verbose=1)
+
 
 
     def load(self, name):

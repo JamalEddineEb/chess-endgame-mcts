@@ -7,7 +7,7 @@ def train_agent():
     env = RookKingEnv(2,demo_mode=True)
     state_size = 8 * 8 * 3  # 8x8 board with 3 channels
     agent = MCTSAgent(state_size)
-    batch_size = 4096
+    batch_size = 1024
     episodes = 500
     target_update_frequency = 1
     checkpoint_frequency = 1
@@ -29,15 +29,14 @@ def train_agent():
 
 
     for e in range(episodes):
-        if e==50:
-            env = RookKingEnv(2,demo_mode=True)
+        env.render_board()
         total_reward = 0
         moves_made = 0
         env.reset()
+        print("episode ",e)
 
         while True:
 
-            # env.render_board()
             fen = env.get_fen()
             action = agent.act(fen)
             next_state, reward, done = env.step(action)
@@ -50,7 +49,7 @@ def train_agent():
 
             # env.render_board()
 
-            if done or moves_made > 2:  # Prevent infinite games
+            if done or moves_made > 5:  # Prevent infinite games
                 print(f"Episode: {e}/{episodes}, Score: {total_reward}, epsilon: {agent.epsilon}")
                 break
         print("mates : ",env.mates,"/",e+1)

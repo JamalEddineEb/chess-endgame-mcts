@@ -35,7 +35,7 @@ class MCTSNode:
         scores.sort(key=lambda x: x[1], reverse=True)  # Sort by UCB1 score
         print("Top 5 Children by UCB1 Score:")
         for i, (move, score, child) in enumerate(scores[:5]):
-            print(f"{i + 1}: Move {move} -> UCB1 Score: {score:.4f}")
+            print(f"{i + 1}: Move {move} -> UCB1 Score: {score:.4f}, prior ",child.prior)
         print("best child : ",best_child.move)
 
         return best_child

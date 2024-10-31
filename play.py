@@ -7,7 +7,7 @@ from mcts import MCTSAgent
 from environment import RookKingEnv
 
 state_size = 8 * 8 * 3  # 8x8 board with 3 channels
-agent = MCTSAgent(state_size)
+agent = MCTSAgent(state_size,c_puct=0.2)
 batch_size = 128
 episodes = 50000
 target_update_frequency = 10
@@ -30,14 +30,18 @@ def play_game(agent):
     done = False
     step = 0
     while not done:
+        print(done," not done")
         time.sleep(1)  # Pause for visibility
         legal_moves = env.get_legal_actions()
 
         # Use the agent's act method to determine the action
-        action = agent.act(env.get_fen())  # Assuming act takes state and legal moves
+        action = agent.act(env.get_fen()) 
+        print(done,"before")
+
         print(f"Agent's move: {action}")
 
         next_state, reward, done = env.step(action)
+        print(done,"after")
         env.render_board()  # Show the board after the agent's move
 
         state = next_state  # Update the state

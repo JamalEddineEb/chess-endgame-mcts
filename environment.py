@@ -18,7 +18,7 @@ class RookKingEnv:
         self.stage = stage
         self.board = chess.Board()
         self.engine = chess.engine.SimpleEngine.popen_uci("/usr/games/stockfish")
-        self.engine.configure({"Skill Level": 3})
+        self.engine.configure({"Skill Level": 20})
         self.mates = 0
         self.steps = 0
         self.demo_mode = demo_mode
@@ -41,8 +41,6 @@ class RookKingEnv:
             # Stage 1: Mate in 1 positions
             self._generate_mate_in_one()
         elif self.stage == 2:
-            # Stage 2: Easy push to mate (2-3 moves)
-            # self._generate_easy_mate()
             self._set_fixed_mate_position()
         elif self.stage == 3:
             # Stage 3: More challenging positions
@@ -124,8 +122,8 @@ class RookKingEnv:
         # Example position for checkmate in one
         self.board.clear_board()
         self.board.set_piece_at(chess.G8, chess.Piece(chess.ROOK, chess.WHITE))
-        self.board.set_piece_at(chess.H2, chess.Piece(chess.KING, chess.BLACK))
-        self.board.set_piece_at(chess.F3, chess.Piece(chess.KING, chess.WHITE))
+        self.board.set_piece_at(chess.H3, chess.Piece(chess.KING, chess.BLACK))
+        self.board.set_piece_at(chess.F4, chess.Piece(chess.KING, chess.WHITE))
         self.board.turn = chess.WHITE
 
     def _generate_easy_mate(self):
@@ -295,7 +293,7 @@ class RookKingEnv:
             reward = -100.0
             self.done = True
         if self.board.is_insufficient_material():
-            reward = -80.0
+            reward = -180.0
             self.done = True
         else:
             # Reward for good positioning
@@ -307,11 +305,13 @@ class RookKingEnv:
                 if self.demo_mode:
                   self.render_board()
                 self.steps+=1
+                if self.board.is_stalemate() or self.board.is_game_over():
+                    self.done = True
 
         return self.get_state(), reward, self.done
 
     def calculate_position_reward(self):
-        reward = -1.0
+        reward = -20.0
         black_king_square = self.board.king(chess.BLACK)
         white_king_square = self.board.king(chess.WHITE)
         rook_squares = self.board.pieces(chess.ROOK, chess.WHITE)
