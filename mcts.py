@@ -12,7 +12,7 @@ from tensorflow.keras.callbacks import EarlyStopping
 import json
 
 class MCTSAgent():
-    def __init__(self, state_size, c_puct=1000000.0, n_simulations=100):
+    def __init__(self, state_size, c_puct=1000.0, n_simulations=300):
         self.state_size = state_size
         self.c_puct = c_puct
         self.memory = deque(maxlen=10000)
@@ -107,7 +107,6 @@ class MCTSAgent():
         env = RookKingEnv()
         env.board = node.board.copy()  # Set env's state to node's board state
         policy = self.model.predict(np.expand_dims(self.get_state(env.board), axis=0), verbose=0)[0][0]
-        print(np.shape(policy))
 
         # Selection and Expansion
         while node.is_fully_expanded():
@@ -130,7 +129,7 @@ class MCTSAgent():
             
             child = node.best_child(self.c_puct)
 
-            while not done :
+            while not done and depth<20:
                 # Ensure the child represents a valid move
                 best_move = child.move  
                 
@@ -144,8 +143,6 @@ class MCTSAgent():
                 child.value += reward  # Update value based on the outcome
 
                 depth += 1
-                if done:
-                    break
 
         # Use batch prediction for values
         if states_to_predict:

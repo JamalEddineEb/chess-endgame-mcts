@@ -122,8 +122,8 @@ class RookKingEnv:
         # Example position for checkmate in one
         self.board.clear_board()
         self.board.set_piece_at(chess.G8, chess.Piece(chess.ROOK, chess.WHITE))
-        self.board.set_piece_at(chess.H3, chess.Piece(chess.KING, chess.BLACK))
-        self.board.set_piece_at(chess.F4, chess.Piece(chess.KING, chess.WHITE))
+        self.board.set_piece_at(chess.H2, chess.Piece(chess.KING, chess.BLACK))
+        self.board.set_piece_at(chess.F3, chess.Piece(chess.KING, chess.WHITE))
         self.board.turn = chess.WHITE
 
     def _generate_easy_mate(self):

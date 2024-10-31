@@ -27,21 +27,19 @@ def random_move(board):
 
 def play_game(agent):
     """Play a game with the model vs a random opponent."""
+    env.render_board()
     done = False
     step = 0
     while not done:
         print(done," not done")
         time.sleep(1)  # Pause for visibility
-        legal_moves = env.get_legal_actions()
-
+        
         # Use the agent's act method to determine the action
         action = agent.act(env.get_fen()) 
-        print(done,"before")
 
         print(f"Agent's move: {action}")
 
         next_state, reward, done = env.step(action)
-        print(done,"after")
         env.render_board()  # Show the board after the agent's move
 
         state = next_state  # Update the state
@@ -55,5 +53,3 @@ def play_game(agent):
         print("Game over!")
 
 play_game(agent)  # Use the agent to play
-
-play_game(agent.model)  # Use the trained model to play

@@ -9,7 +9,7 @@ def train_agent():
     agent = MCTSAgent(state_size)
     batch_size = 1024
     episodes = 500
-    target_update_frequency = 1
+    target_update_frequency = 2
     checkpoint_frequency = 1
 
     import tensorflow as tf
