@@ -5,6 +5,7 @@ import numpy as np
 import time
 from mcts import MCTSAgent
 from environment import RookKingEnv
+from chess_renderer import ChessRenderer
 
 state_size = 8 * 8 * 3  # 8x8 board with 3 channels
 agent = MCTSAgent(state_size,c_puct=0.2)
@@ -17,7 +18,9 @@ move_mapping_file = "move_mapping.json"
 print(f"Loading model from {model_file}")
 agent.load(model_file)
 agent.load_move_mapping(move_mapping_file)
-env = RookKingEnv(stage=2,demo_mode=True)
+env = RookKingEnv(stage=2)
+renderer = ChessRenderer(gui_mode=True)
+
 with open(move_mapping_file, "r") as file:
     move_mapping = json.load(file)
 def random_move(board):
@@ -27,7 +30,7 @@ def random_move(board):
 
 def play_game(agent):
     """Play a game with the model vs a random opponent."""
-    env.render_board()
+    renderer.render_board(env.board)
     done = False
     step = 0
     while not done:
@@ -40,7 +43,7 @@ def play_game(agent):
         print(f"Agent's move: {action}")
 
         next_state, reward, done = env.step(action)
-        env.render_board()  # Show the board after the agent's move
+        renderer.render_board(env.board)  # Show the board after the agent's move
 
         state = next_state  # Update the state
         step += 1
@@ -52,4 +55,4 @@ def play_game(agent):
     else:
         print("Game over!")
 
-play_game(agent)  # Use the agent to play
+play_game(agent) 

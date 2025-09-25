@@ -1,0 +1,7 @@
+cairosvg
+chess
+ipython
+keras
+memory_profiler
+numpy
+tensorflow

@@ -2,31 +2,28 @@ import chess
 import chess.engine
 import chess.svg
 import numpy as np
-from IPython.display import SVG, display, clear_output, DisplayHandle
+from IPython.display import SVG, display
 import random
-from collections import deque
-import tensorflow as tf
-from cairosvg import svg2png
 import chess
 import chess.svg
-from tkinter import PhotoImage
-from tkinter import Tk, Canvas
+from chess_renderer import ChessRenderer
 import io
 
 class RookKingEnv:
     def __init__(self, stage=1,demo_mode=False):
         self.stage = stage
         self.board = chess.Board()
-        self.engine = chess.engine.SimpleEngine.popen_uci("/usr/games/stockfish")
+        self.engine = chess.engine.SimpleEngine.popen_uci("/usr/bin/stockfish")
         self.engine.configure({"Skill Level": 20})
         self.mates = 0
         self.steps = 0
         self.demo_mode = demo_mode
-        if demo_mode:
-            self.root = Tk()
-            self.canvas = Canvas(self.root, width=400, height=400)
-            self.canvas.pack()
-            self.board_display = display(SVG(chess.svg.board(self.board, size=400)), display_id=True)
+        self.renderer = ChessRenderer()
+        # if demo_mode:
+        #     self.root = Tk()
+        #     self.canvas = Canvas(self.root, width=400, height=400)
+        #     self.canvas.pack()
+        #     self.board_display = display(SVG(chess.svg.board(self.board, size=400)), display_id=True)
         self.reset()
 
 
@@ -121,9 +118,9 @@ class RookKingEnv:
     def _set_fixed_mate_position(self):
         # Example position for checkmate in one
         self.board.clear_board()
-        self.board.set_piece_at(chess.G8, chess.Piece(chess.ROOK, chess.WHITE))
         self.board.set_piece_at(chess.H2, chess.Piece(chess.KING, chess.BLACK))
-        self.board.set_piece_at(chess.F3, chess.Piece(chess.KING, chess.WHITE))
+        self.board.set_piece_at(chess.A7, chess.Piece(chess.ROOK, chess.WHITE))
+        self.board.set_piece_at(chess.E3, chess.Piece(chess.KING, chess.WHITE))
         self.board.turn = chess.WHITE
 
     def _generate_easy_mate(self):
@@ -279,7 +276,7 @@ class RookKingEnv:
 
         self.board.push(action)
         if self.demo_mode:
-          self.render_board()
+          self.renderer.render_board(self.board)
         reward = -0.5
 
         # More nuanced reward structure
@@ -303,7 +300,7 @@ class RookKingEnv:
             if not self.done:
                 self.opponent_move()
                 if self.demo_mode:
-                  self.render_board()
+                  self.renderer.render_board(self.board)
                 self.steps+=1
                 if self.board.is_stalemate() or self.board.is_game_over():
                     self.done = True
@@ -350,27 +347,3 @@ class RookKingEnv:
 
     def get_legal_actions(self):
         return list(self.board.legal_moves)
-
-    def render_board(self):
-        # Generate SVG of the current board state
-        svg_board = chess.svg.board(self.board)
-        
-        # Convert SVG to a format that can be rendered (e.g., using cairosvg)
-        svg2png(bytestring=svg_board.encode('utf-8'), write_to='board.png')
-
-        # Clear the canvas and display the generated PNG
-        self.canvas.delete("all")
-        self.board_image = PhotoImage(file='board.png')
-        self.canvas.create_image(0, 0, anchor='nw', image=self.board_image)
-        self.canvas.update()
-
-    def display_svg(self, svg_data):
-        # Convert SVG to a PhotoImage
-        img_data = io.BytesIO(svg_data.encode('utf-8'))
-        
-        # Read the SVG image data to a format that Tkinter can understand
-        img = PhotoImage(data=img_data.read())
-
-        # Display the image in the canvas
-        self.canvas.create_image(0, 0, anchor=tk.NW, image=img)
-        self.canvas.img = img  # Keep a reference to avoid garbage collection

@@ -2,9 +2,11 @@ import os
 from mcts import MCTSAgent
 from environment import RookKingEnv
 from memory_profiler import profile
+from chess_renderer import ChessRenderer
 
 def train_agent():
-    env = RookKingEnv(2,demo_mode=True)
+    env = RookKingEnv(stage=2,demo_mode=True)
+    chess_renderer = ChessRenderer()
     state_size = 8 * 8 * 3  # 8x8 board with 3 channels
     agent = MCTSAgent(state_size)
     batch_size = 1024
@@ -29,7 +31,7 @@ def train_agent():
 
 
     for e in range(episodes):
-        env.render_board()
+        chess_renderer.render_board(env.board)
         total_reward = 0
         moves_made = 0
         env.reset()

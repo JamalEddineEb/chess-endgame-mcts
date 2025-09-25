@@ -27,7 +27,7 @@ class MCTSAgent():
         self.target_model = self._build_model()
         self.update_target_model()
         self.reverse_move_mapping = {}
-        self.engine = chess.engine.SimpleEngine.popen_uci("/usr/games/stockfish")
+        self.engine = chess.engine.SimpleEngine.popen_uci("/usr/bin/stockfish")
 
     def _build_model(self):
         # Input layer for an 8x8 chessboard with 3 channels
@@ -72,7 +72,7 @@ class MCTSAgent():
             if move_uci not in self.move_mapping:
                 idx = len(self.move_mapping)
                 self.move_mapping[move_uci] = idx
-                self.reverse_mapping[idx] = move_uci
+                self.reverse_move_mapping[idx] = move_uci
 
     def get_state(self, board):
         # Create a more informative state representation
@@ -129,7 +129,7 @@ class MCTSAgent():
             
             child = node.best_child(self.c_puct)
 
-            while not done and depth<20:
+            while not done and depth<10:
                 # Ensure the child represents a valid move
                 best_move = child.move  
                 
@@ -190,7 +190,7 @@ class MCTSAgent():
                 target_value = reward
             else:
                 # Get maximum value from future states
-                max_future_value = np.max(future_value[i])
+                max_future_value = future_value[i][0]
                 target_value = reward + self.gamma * max_future_value
 
             # Update the value output for the action taken
@@ -201,7 +201,7 @@ class MCTSAgent():
             target_policy[move_idx] = 1  # Set the action taken to 1
             current_policy[i] = target_policy  # Update current policy
 
-        self.model.fit(states, [current_policy, current_value], epochs=10, verbose=1)
+        self.model.fit(states, [current_policy, current_value], epochs=2, verbose=1)
 
 
 
