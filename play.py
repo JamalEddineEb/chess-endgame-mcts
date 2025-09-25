@@ -42,10 +42,9 @@ def play_game(agent):
 
         print(f"Agent's move: {action}")
 
-        next_state, reward, done = env.step(action)
+        env.step(action)
         renderer.render_board(env.board)  # Show the board after the agent's move
 
-        state = next_state  # Update the state
         step += 1
 
     if env.board.is_checkmate():
