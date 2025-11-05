@@ -12,7 +12,7 @@ from tensorflow.keras.callbacks import EarlyStopping
 import json
 
 class MCTSAgent():
-    def __init__(self, state_size, c_puct=1000.0, n_simulations=300):
+    def __init__(self, state_size, c_puct=1000.0, n_simulations=100):
         self.state_size = state_size
         self.c_puct = c_puct
         self.memory = deque(maxlen=10000)
@@ -98,7 +98,6 @@ class MCTSAgent():
 
         # Use UCB1 to select the best move (explore-exploit tradeoff)
         best_move = root.best_child(self.c_puct).move
-        print(best_move)
 
         return best_move
 
@@ -129,12 +128,13 @@ class MCTSAgent():
             
             child = node.best_child(self.c_puct)
 
-            while not done and depth<10:
+            while not done and depth<4:
                 # Ensure the child represents a valid move
                 best_move = child.move  
                 
                 # Take the move in the environment
                 next_state, reward, done = env.step(best_move)
+
                 self.remember(env.get_state(), best_move, reward, next_state, env.get_fen(), done)
                 states_to_predict.append(self.get_state(env.board))  # Capture the board state for batch prediction
 

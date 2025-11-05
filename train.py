@@ -5,7 +5,7 @@ from memory_profiler import profile
 from chess_renderer import ChessRenderer
 
 def train_agent():
-    env = RookKingEnv(stage=2,demo_mode=True)
+    env = RookKingEnv(stage=4,demo_mode=True)
     chess_renderer = ChessRenderer()
     state_size = 8 * 8 * 3  # 8x8 board with 3 channels
     agent = MCTSAgent(state_size)

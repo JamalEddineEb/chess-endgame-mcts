@@ -335,7 +335,6 @@ class RookKingEnv:
         return reward
 
     def opponent_move(self):
-        # Use Stockfish to make a move
         if not self.board.is_game_over():
             result = self.engine.play(self.board, chess.engine.Limit(time=1.0))
             self.board.push(result.move)
