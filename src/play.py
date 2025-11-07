@@ -3,9 +3,9 @@ import random
 import json
 import numpy as np
 import time
-from mcts import MCTSAgent
-from environment import RookKingEnv
-from chess_renderer import ChessRenderer
+from src.mcts_agent import MCTSAgent
+from src.environment import RookKingEnv
+from src.chess_renderer import ChessRenderer
 
 state_size = 8 * 8 * 3  # 8x8 board with 3 channels
 agent = MCTSAgent(state_size,c_puct=0.2)

@@ -1,14 +1,13 @@
 import math
 
 class MCTSNode:
-    def __init__(self, board,agent,parent=None, prior=0,move=None):
+    def __init__(self, board,parent=None, prior=0,move=None):
         self.board = board
         self.parent = parent
         self.children = {}
         self.visits = 0
         self.value = 0
         self.prior = prior
-        self.agent = agent
         self.move = move
 
 
@@ -21,6 +20,7 @@ class MCTSNode:
         scores = []  # List to hold (move, ucb1_score, child) tuples for printing
 
         for move, child in self.children.items():
+            print(move)
             ucb1_score = (child.value / (child.visits + 1)) + c_puct * child.prior * (math.sqrt(self.visits) / (child.visits + 1))
             
             # Store the score for later printing
@@ -42,14 +42,10 @@ class MCTSNode:
 
 
 
-    def expand(self, legal_moves, policy):
+    def expand(self, legal_moves, priors):
         for move in legal_moves:
             if move not in self.children:
-                # Create a new board state by pushing the move
-                new_board = self.board.copy()
-                new_board.push(move)
-                move_idx = self.agent.move_mapping[move.uci()]
-                self.children[move] = MCTSNode(new_board, agent=self.agent,parent=self, prior=policy[move_idx],move=move)
+                self.children[move] = MCTSNode(board=None,parent=self, prior=priors.get(move,0.0),move=move)
 
     def update(self, value):
         self.visits += 1

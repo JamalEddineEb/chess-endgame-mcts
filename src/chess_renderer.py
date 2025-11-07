@@ -47,8 +47,26 @@ class ChessRenderer:
                 time.sleep(5)
         else:
             # Console fallback
-            print(board)
+            self.render_board_colored(board)
             print("-" * 40)
+
+    def render_board_colored(self, board: chess.Board):
+        RESET = "\033[0m"
+        WHITE = "\033[97m"
+        BLACK = "\033[90m"
+        for rank in range(8, 0, -1):
+            row = []
+            for file in range(8):
+                square = chess.square(file, rank - 1)
+                piece = board.piece_at(square)
+                if piece:
+                    color = WHITE if piece.color == chess.WHITE else BLACK
+                    row.append(color + piece.symbol().upper() + RESET)
+                else:
+                    row.append(".")
+            print(" ".join(row))
+        print("-" * 40)
+
 
     def start(self):
         if self.gui_mode and self.app:

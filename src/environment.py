@@ -1,13 +1,10 @@
 import chess
 import chess.engine
-import chess.svg
 import numpy as np
-from IPython.display import SVG, display
 import random
 import chess
-import chess.svg
-from chess_renderer import ChessRenderer
-import io
+
+from src.chess_renderer import ChessRenderer
 
 class RookKingEnv:
     def __init__(self, stage=1,demo_mode=False):

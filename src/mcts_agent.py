@@ -1,15 +1,13 @@
 import chess
 import numpy as np
 import random
-import math
 from collections import deque
 from keras import layers, models
-from keras.optimizers import Adam
-from memory_profiler import profile
-from environment import RookKingEnv
-from node import MCTSNode
-from tensorflow.keras.callbacks import EarlyStopping
 import json
+
+from src.environment import RookKingEnv
+from src.node import MCTSNode
+from src.utils.utilities import *
 
 class MCTSAgent():
     def __init__(self, state_size, c_puct=1000.0, n_simulations=100):
@@ -51,7 +49,7 @@ class MCTSAgent():
         # Flatten the output from the convolutional layers
         x = layers.Flatten()(x)
 
-        # Policy head for move selection (outputs probabilities for each possible move)
+        # Policy head for move selection 
         policy_output = layers.Dense(len(chess.SQUARES) * len(chess.SQUARES), activation='softmax', name='policy')(x)
 
         # Value head for estimating the value of the current board state
@@ -66,13 +64,7 @@ class MCTSAgent():
     def update_target_model(self):
         self.target_model.set_weights(self.model.get_weights())
 
-    def update_move_mapping(self, legal_moves):
-        for move in legal_moves:
-            move_uci = move.uci()
-            if move_uci not in self.move_mapping:
-                idx = len(self.move_mapping)
-                self.move_mapping[move_uci] = idx
-                self.reverse_move_mapping[idx] = move_uci
+
 
     def get_state(self, board):
         # Create a more informative state representation
@@ -93,7 +85,7 @@ class MCTSAgent():
     
 
     def act(self, fen):
-        root = MCTSNode(chess.Board(fen), agent=self)
+        root = MCTSNode(chess.Board(fen))
         self.simulate(root, self.n_simulations)
 
         # Use UCB1 to select the best move (explore-exploit tradeoff)
@@ -101,64 +93,98 @@ class MCTSAgent():
 
         return best_move
 
-    def simulate(self, root, n_simulations):
-        node = root
+    def simulate(self, root, n_simulations, k_root=8, depth_limit=64):
         env = RookKingEnv()
-        env.board = node.board.copy()  # Set env's state to node's board state
-        policy = self.model.predict(np.expand_dims(self.get_state(env.board), axis=0), verbose=0)[0][0]
+        env.board = root.board.copy()
 
-        # Selection and Expansion
-        while node.is_fully_expanded():
-            node = node.best_child(self.c_puct)
-            env.board = node.board  # Keep environment state in sync
+        # 1) Root: Gumbel-Top-k to select candidate first moves
+        legal_root = list(env.get_legal_actions())
+        if not legal_root:
+            return  # terminal
 
-        # Expand node by adding children
-        legal_moves = list(env.get_legal_actions())
-        node.expand(legal_moves, policy)
+        candidates, _, _ = gumbel_top_k_root_candidates(
+            self.model, self.get_state, env, legal_root, k=k_root
+        )
 
-        # Prepare for simulation
-        states_to_predict = []
+        # Build or retrieve child nodes for candidates (defer full expansion)
+        for mv in candidates:
+            if mv not in root.children:
+                # create a placeholder child with prior set from policy later
+                child_node = MCTSNode(board=None, parent=root, move=mv, prior=0.0)
+                root.children[mv] = child_node
 
-        for _ in range(n_simulations):
-            done = False  # Reset done for each simulation
-            depth = 0    # Reset depth for each simulation
-            
-            # Reset the environment state to the root node's board state
-            env.board = node.board.copy()
-            
-            child = node.best_child(self.c_puct)
+        # 2) Allocate simulations evenly among candidates (simple default)
+        sims_per_cand = max(1, n_simulations // max(1, len(candidates)))
 
-            while not done and depth<4:
-                # Ensure the child represents a valid move
-                best_move = child.move  
-                
-                # Take the move in the environment
-                next_state, reward, done = env.step(best_move)
+        # 3) Run simulations, one leaf expansion per simulation
+        for mv in candidates:
+            for _ in range(sims_per_cand):
+                path = [root]
+                env.board = root.board.copy()
 
-                self.remember(env.get_state(), best_move, reward, next_state, env.get_fen(), done)
-                states_to_predict.append(self.get_state(env.board))  # Capture the board state for batch prediction
+                # Force the first move to be the candidate mv
+                if mv in root.children:
+                    child = root.children[mv]
+                else:
+                    # Should not happen, but guard
+                    child = None
 
-                # Update the child node based on the outcome
-                child.visits += 1
-                child.value += reward  # Update value based on the outcome
+                # Step env with the candidate move to sync state
+                next_state, reward, done = env.step(mv)
 
-                depth += 1
+                if child is None or child.board is None:
+                    # initialize child's board/state
+                    if child is None:
+                        child = MCTSNode(board=env.board.copy(), parent=root, move=mv, prior=0.0)
+                        root.children[mv] = child
+                    else:
+                        child.board = env.board.copy()
+                path.append(child)
 
-        # Use batch prediction for values
-        if states_to_predict:
-            values = self.model.predict(np.array(states_to_predict), verbose=0)
+                # Selection down the tree from the candidate child
+                node = child
+                depth = 1
+                while (node.children and all(ch.visits > 0 for ch in node.children.values())
+                    and not done and depth < depth_limit):
+                    node = puct_select_child(node, self.c_puct)
+                    # sync env with the node's move from its parent
+                    next_state, reward, done = env.step(node.move)
+                    if node.board is None:
+                        node.board = env.board.copy()
+                    path.append(node)
+                    depth += 1
 
-            # Backpropagation: update each node's value based on the predicted values
-            for i, value in enumerate(values):
-                node.update(value[0][0])  # Update the current node's value
-                
-                # Optionally traverse back through the tree to update parent nodes
-                parent = node.parent
-                while parent is not None:
-                    parent.update(value[0][0])  # Use the predicted value for backpropagation
-                    parent = parent.parent
+                # If terminal reached
+                if done:
+                    # terminal reward in root perspective
+                    leaf_value = float(reward)
+                    backup_path(path, leaf_value)
+                    continue
 
+                # If node has no children yet, expand once
+                if not node.children:
+                    leaf_value = expand_leaf(node, env, self.get_state, self.model)
+                    backup_path(path, leaf_value)
+                    continue
 
+                # Otherwise, pick an unvisited child to expand
+                unvisited = [ch for ch in node.children.values() if ch.visits == 0]
+                if unvisited:
+                    u = random.choice(unvisited)
+                    # step env to u
+                    next_state, reward, done = env.step(u.move)
+                    if u.board is None:
+                        u.board = env.board.copy()
+                    path.append(u)
+                    if done:
+                        leaf_value = float(reward)
+                    else:
+                        leaf_value = expand_leaf(u, env, self.get_state, self.model)
+                    backup_path(path, leaf_value)
+                else:
+                    # All visited: expand leaf anyway (rare here)
+                    leaf_value = expand_leaf(node, env, self.get_state, self.model)
+                    backup_path(path, leaf_value)
 
 
     def remember(self, state, action, reward, next_state,fen, done):
@@ -201,7 +227,7 @@ class MCTSAgent():
             target_policy[move_idx] = 1  # Set the action taken to 1
             current_policy[i] = target_policy  # Update current policy
 
-        self.model.fit(states, [current_policy, current_value], epochs=2, verbose=1)
+        self.model.fit(states, [current_policy, current_value], epochs=5, verbose=1)
 
 
 

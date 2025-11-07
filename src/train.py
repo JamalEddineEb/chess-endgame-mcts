@@ -1,11 +1,11 @@
 import os
-from mcts import MCTSAgent
-from environment import RookKingEnv
-from memory_profiler import profile
-from chess_renderer import ChessRenderer
+
+from src.mcts_agent import MCTSAgent
+from src.environment import RookKingEnv
+from src.chess_renderer import ChessRenderer
 
 def train_agent():
-    env = RookKingEnv(stage=4,demo_mode=True)
+    env = RookKingEnv(stage=2,demo_mode=True)
     chess_renderer = ChessRenderer()
     state_size = 8 * 8 * 3  # 8x8 board with 3 channels
     agent = MCTSAgent(state_size)
@@ -16,7 +16,6 @@ def train_agent():
 
     import tensorflow as tf
     print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
-
 
     model_file = "dqn_model_checkpoint.weights.h5"
     move_mapping_file = "move_mapping.json"
