@@ -37,7 +37,6 @@ def train_agent():
         print("episode ",e)
 
         while True:
-
             fen = env.get_fen()
             action = agent.act(fen)
             next_state, reward, done = env.step(action)

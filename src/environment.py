@@ -272,6 +272,7 @@ class RookKingEnv:
             return self.get_state(), -10, True
 
         self.board.push(action)
+
         if self.demo_mode:
           self.renderer.render_board(self.board)
         reward = -0.5
