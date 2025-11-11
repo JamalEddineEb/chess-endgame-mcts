@@ -9,7 +9,7 @@ def train_agent():
     chess_renderer = ChessRenderer()
     state_size = 8 * 8 * 3  # 8x8 board with 3 channels
     agent = MCTSAgent(state_size)
-    batch_size = 1024
+    batch_size = 30
     episodes = 500
     target_update_frequency = 2
     checkpoint_frequency = 1
@@ -23,9 +23,7 @@ def train_agent():
     if os.path.exists(model_file):
         print(f"Loading model from {model_file}")
         agent.load(model_file)
-        agent.load_move_mapping(move_mapping_file)
     else:
-        agent.load_move_mapping(move_mapping_file)
         print("No model found, training a new one.")
 
 
@@ -42,7 +40,7 @@ def train_agent():
             next_state, reward, done = env.step(action)
             fen = env.get_fen()
 
-            # agent.remember(state, action, reward, next_state,fen, done)
+            agent.remember(env.get_state(), action, reward, next_state, done)
             total_reward += reward
             moves_made += 1
             print(moves_made,"moves made\n\n\n")
@@ -52,18 +50,16 @@ def train_agent():
             if done or moves_made > 5:  # Prevent infinite games
                 print(f"Episode: {e}/{episodes}, Score: {total_reward}, epsilon: {agent.epsilon}")
                 break
-        print("mates : ",env.mates,"/",e+1)
+            print("mates : ",env.mates,"/",e+1)
 
-        if e % checkpoint_frequency == 0:
-            agent.replay(batch_size)
-            agent.save(model_file)
-            print("saved")
-            agent.save_move_mapping()
-        # env.render_board()
+            if e % checkpoint_frequency == 0:
+                agent.replay(batch_size)
+                agent.save(model_file)
+            # env.render_board()
 
-        # Update target network periodically
-        if e % target_update_frequency == 0:
-            agent.update_target_model()
+            # Update target network periodically
+            if e % target_update_frequency == 0:
+                agent.update_target_model()
             
 
     return agent

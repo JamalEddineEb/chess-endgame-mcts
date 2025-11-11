@@ -15,7 +15,7 @@ class MCTSAgent():
         self.c_puct = c_puct
         self.memory = deque(maxlen=10000)
         self.n_simulations = n_simulations
-        self.move_mapping = {}
+        self.move_mapping = MoveMapping()
         self.gamma = 0.95
         self.epsilon = 1
         self.epsilon_decay = 0.9998
@@ -26,7 +26,6 @@ class MCTSAgent():
         self.model = self._build_model()
         self.target_model = self._build_model()
         self.update_target_model()
-        self.reverse_move_mapping = {}
         self.engine = chess.engine.SimpleEngine.popen_uci("/usr/bin/stockfish")
 
     def _build_model(self):
@@ -90,30 +89,32 @@ class MCTSAgent():
         root = MCTSNode(chess.Board(fen))
         best_move = self.simulate(root)
 
-        return best_move
+        return best_move.move
     
     def sequential_halving_phase(self, root, candidates, env, budget_per_candidate):
         """
         Run one phase of Sequential Halving for the given candidate moves.
         """
         # Run rollouts for each candidate
-        for mv in candidates:
-            child = root.children[mv]
+        print(len(candidates)," kkkk")
+        for node in candidates:
+            child = root.children[node.move]
             for _ in range(budget_per_candidate):
-                self.rollout_from_candidate(root, child, env, mv)
+                self.rollout_from_candidate(root, child, env, node.move)
 
         scores = {}
 
+        max_nb = max([a.visits for a in candidates])
 
-        for _,child in root.children.items():
-            scores[child.move] = (self.c_visit+4)*self.c_scale*child.prior
+
+        for child in candidates:
+            scores[child] = (self.c_visit + max_nb)*self.c_scale*child.prior
 
         sorted_moves = sorted(scores.items(), key=lambda x: x[1], reverse=True)
 
-
         # Keep top half
         n_keep = max(1, len(scores) // 2)
-        return [move for move, _ in sorted_moves[:n_keep]]
+        return [node for node, _ in sorted_moves[:n_keep]]
     
 
     def rollout_from_candidate(self,root, child, env, candidate_move, depth_limit=64):
@@ -125,6 +126,7 @@ class MCTSAgent():
 
         # Step env with candidate move
         next_state, reward, done = env.step(candidate_move)
+        self.remember(env.get_state(), candidate_move, reward, next_state, done)
         if child.board is None:
             child.board = env.board.copy()
         path.append(child)
@@ -180,9 +182,9 @@ class MCTSAgent():
         # Sequential Halving
         current_candidates = list(candidates)
 
-        print(current_candidates)
+        P = math.floor(math.log2(k_root))+1
 
-        P = math.floor(math.log2(k_root))
+        n_candidates = len(current_candidates)
 
         for phase_number in range(P):
             n_candidates = len(current_candidates)
@@ -191,13 +193,16 @@ class MCTSAgent():
             budget_per_candidate = max(1, self.n_simulations // (P*k_root*2**phase_number))
             current_candidates = self.sequential_halving_phase(root, current_candidates, env, budget_per_candidate)
 
+        print(n_candidates, " lllllll")
+
         # Return best move among remaining candidates
-        best_move = max(current_candidates, key=lambda mv: root.children[mv].value)
+        best_move = current_candidates[0]
+
         return best_move
 
 
-    def remember(self, state, action, reward, next_state,fen, done):
-        self.memory.append((state, action, reward, next_state,fen, done))
+    def remember(self, state, action, reward, next_state, done):
+        self.memory.append((state, action, reward, next_state, done))
 
     def replay(self, batch_size):
         if len(self.memory) < batch_size:
@@ -216,9 +221,9 @@ class MCTSAgent():
         future_policy, future_value = self.target_model.predict(next_states, verbose=0)
 
         # Update Q-values for actions taken
-        for i, (state, action, reward, next_state, fen, done) in enumerate(minibatch):
+        for i, (state, action, reward, next_state, done) in enumerate(minibatch):
             # Extract the action index
-            move_idx = self.move_mapping[action.uci()]
+            move_idx = self.move_mapping.get_index(action.uci())
 
             # Calculate target based on the policy output
             if done:
@@ -245,13 +250,3 @@ class MCTSAgent():
 
     def save(self, name):
         self.model.save_weights(name)
-
-    def save_move_mapping(self, filename="move_mapping.json"):
-        with open(filename, 'w') as f:
-            json.dump({k: str(v) for k, v in self.move_mapping.items()}, f)
-
-    def load_move_mapping(self, filename="move_mapping.json"):
-        with open(filename, 'r') as f:
-            move_mapping_loaded = json.load(f)
-            self.move_mapping = {k: int(v) for k, v in move_mapping_loaded.items()}
-            self.reverse_move_mapping = {v: k for k, v in self.move_mapping.items()}

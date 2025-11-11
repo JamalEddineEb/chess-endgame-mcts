@@ -18,16 +18,14 @@ def gumbel_top_k_root_candidates(root, k):
 
     scores = {}
     for i, (move, child) in enumerate(root.children.items()):
-        scores[move] = child.prior + g[i]
+        scores[child] = child.prior + g[i]
 
     sorted_moves = sorted(scores.items(), key=lambda x: x[1], reverse=True)
 
-    # Get top k
-    top_k = sorted_moves[:k]
+    top_k_children = [child for child, _ in sorted_moves[:k]]
 
-    top_k_moves = [move for move, _ in sorted_moves[:k]]
+    return top_k_children
 
-    return top_k_moves
 
 
 def puct_select_child(node, c_puct):

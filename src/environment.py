@@ -279,7 +279,7 @@ class RookKingEnv:
 
         # More nuanced reward structure
         if self.board.is_checkmate():
-            print("checkmate!!!!!!!!!!!!!!")
+            print("checkmate!!!!!!!!!")
             reward = 150.0
             self.mates += 1
             self.done = True
