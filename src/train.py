@@ -9,7 +9,7 @@ def train_agent():
     chess_renderer = ChessRenderer()
     state_size = 8 * 8 * 3  # 8x8 board with 3 channels
     agent = MCTSAgent(state_size)
-    batch_size = 30
+    batch_size = 100
     episodes = 500
     target_update_frequency = 2
     checkpoint_frequency = 1
@@ -18,7 +18,6 @@ def train_agent():
     print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
     model_file = "dqn_model_checkpoint.weights.h5"
-    move_mapping_file = "move_mapping.json"
 
     if os.path.exists(model_file):
         print(f"Loading model from {model_file}")
@@ -51,6 +50,8 @@ def train_agent():
                 print(f"Episode: {e}/{episodes}, Score: {total_reward}, epsilon: {agent.epsilon}")
                 break
             print("mates : ",env.mates,"/",e+1)
+
+            print(e%checkpoint_frequency)
 
             if e % checkpoint_frequency == 0:
                 agent.replay(batch_size)

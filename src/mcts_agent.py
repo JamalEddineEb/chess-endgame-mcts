@@ -96,7 +96,6 @@ class MCTSAgent():
         Run one phase of Sequential Halving for the given candidate moves.
         """
         # Run rollouts for each candidate
-        print(len(candidates)," kkkk")
         for node in candidates:
             child = root.children[node.move]
             for _ in range(budget_per_candidate):
@@ -123,10 +122,12 @@ class MCTSAgent():
         """
         path = [root]
         env.board = root.board.copy()
+        state = env.get_state()
 
         # Step env with candidate move
         next_state, reward, done = env.step(candidate_move)
-        self.remember(env.get_state(), candidate_move, reward, next_state, done)
+
+        self.remember(state, candidate_move, reward, next_state, done)
         if child.board is None:
             child.board = env.board.copy()
         path.append(child)
@@ -193,7 +194,6 @@ class MCTSAgent():
             budget_per_candidate = max(1, self.n_simulations // (P*k_root*2**phase_number))
             current_candidates = self.sequential_halving_phase(root, current_candidates, env, budget_per_candidate)
 
-        print(n_candidates, " lllllll")
 
         # Return best move among remaining candidates
         best_move = current_candidates[0]
@@ -210,7 +210,7 @@ class MCTSAgent():
             return
         print("Replaying...")
 
-        minibatch = random.sample(self.memory, batch_size)
+        minibatch = self.memory
 
         # Reshape states and next_states to match model input
         states = np.array([x[0] for x in minibatch])
@@ -218,30 +218,34 @@ class MCTSAgent():
 
         # Predict policy and value for current states
         current_policy, current_value = self.model.predict(states, verbose=0)
-        future_policy, future_value = self.target_model.predict(next_states, verbose=0)
+        _, future_value = self.target_model.predict(next_states, verbose=0)
+
+        target_value = np.zeros_like(current_value) 
 
         # Update Q-values for actions taken
-        for i, (state, action, reward, next_state, done) in enumerate(minibatch):
+        for i, (_, action, reward, _, done) in enumerate(minibatch):
             # Extract the action index
             move_idx = self.move_mapping.get_index(action.uci())
 
             # Calculate target based on the policy output
             if done:
-                target_value = reward
+                target_value[i] = reward
             else:
                 # Get maximum value from future states
                 max_future_value = future_value[i][0]
-                target_value = reward + self.gamma * max_future_value
+                target_value[i] = reward + self.gamma * max_future_value
 
             # Update the value output for the action taken
-            current_value[i] = target_value
             
             # Update the policy with a one-hot vector for the action taken
             target_policy = np.zeros_like(current_policy[i])  # Create zero vector for target policy
             target_policy[move_idx] = 1  # Set the action taken to 1
             current_policy[i] = target_policy  # Update current policy
 
+        current_value = target_value
+
         self.model.fit(states, [current_policy, current_value], epochs=5, verbose=1)
+        self.memory.clear()
 
 
 
@@ -250,3 +254,13 @@ class MCTSAgent():
 
     def save(self, name):
         self.model.save_weights(name)
+
+    def save_move_mapping(self, filename="move_mapping.json"):
+        with open(filename, 'w') as f:
+            json.dump({k: str(v) for k, v in self.move_mapping.items()}, f)
+
+    def load_move_mapping(self, filename="move_mapping.json"):
+        with open(filename, 'r') as f:
+            move_mapping_loaded = json.load(f)
+            self.move_mapping = {k: int(v) for k, v in move_mapping_loaded.items()}
+            self.reverse_move_mapping = {v: k for k, v in self.move_mapping.items()}

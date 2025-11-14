@@ -43,7 +43,7 @@ def puct_select_child(node, c_puct):
 def ceil_log2(x):
     return math.ceil(math.log2(max(1, x)))
 
-def backup_path(path, leaf_value, to_play_sign=1):
+def backup_path(path, leaf_value):
     v = leaf_value
     for n in reversed(path):
         n.visits += 1
