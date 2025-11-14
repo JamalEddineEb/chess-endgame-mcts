@@ -38,7 +38,7 @@ def play_game(agent):
         time.sleep(1)  # Pause for visibility
         
         # Use the agent's act method to determine the action
-        action = agent.act(env.get_fen()) 
+        action = agent.act() 
 
         print(f"Agent's move: {action}")
 

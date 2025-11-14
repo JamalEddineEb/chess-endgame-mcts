@@ -5,6 +5,7 @@ from collections import deque
 from keras import layers, models
 import json
 
+from src.chess_renderer import ChessRenderer
 from src.environment import RookKingEnv
 from src.mcts_node import MCTSNode
 from src.utils.utilities import *
@@ -85,9 +86,8 @@ class MCTSAgent():
         return state
     
 
-    def act(self):
-        root = MCTSNode()
-        best_move = self.simulate(root)
+    def act(self, env):
+        best_move = self.simulate(env)
 
         return best_move.move
     
@@ -122,6 +122,7 @@ class MCTSAgent():
         """
         path = [root]
         state = env.get_state()
+        base_line = env.moves_played
 
         # Step env with candidate move
         next_state, reward, done = env.step(candidate_move)
@@ -131,11 +132,13 @@ class MCTSAgent():
 
         # Selection down the tree
         node = child
+        node.expand_leaf(env, self.model)
         depth = 1
         while node.children and all(ch.visits > 0 for ch in node.children.values()) \
                 and not done and depth < depth_limit:
             node = puct_select_child(node, self.c_puct)
             next_state, reward, done = env.step(node.move)
+            
             path.append(node)
             depth += 1
 
@@ -153,18 +156,18 @@ class MCTSAgent():
                 next_state, reward, done = env.step(u.move)
                 path.append(u)
                 leaf_value = float(reward) if done else u.expand_leaf(env, self.model)
-                backup_path(path, leaf_value)
             else:
                 leaf_value = node.expand_leaf(env, self.model)
-                backup_path(path, leaf_value)
+            backup_path(path, leaf_value)
+
+        env.go_back(base_line)
 
 
-
-    def simulate(self, root, k_root=16):
+    def simulate(self, env, k_root=16):
         """
         Root-level MCTS simulation with Gumbel-top-k and Sequential Halving.
         """
-        env = RookKingEnv()
+        root = MCTSNode()
         root.expand_leaf(env, self.model)
 
         candidates = gumbel_top_k_root_candidates(
@@ -184,12 +187,13 @@ class MCTSAgent():
                 break
             budget_per_candidate = max(1, self.n_simulations // (P*k_root*2**phase_number))
             current_candidates = self.sequential_halving_phase(root, current_candidates, env, budget_per_candidate)
+            
 
 
         # Return best move among remaining candidates
-        best_move = current_candidates[0]
+        best_candidate = current_candidates[0]
 
-        return best_move
+        return best_candidate
 
 
     def remember(self, state, action, reward, next_state, done):
