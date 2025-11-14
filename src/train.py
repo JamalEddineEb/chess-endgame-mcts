@@ -9,7 +9,7 @@ def train_agent():
     chess_renderer = ChessRenderer()
     state_size = 8 * 8 * 3  # 8x8 board with 3 channels
     agent = MCTSAgent(state_size)
-    batch_size = 800
+    batch_size = 100
     episodes = 500
     target_update_frequency = 2
     checkpoint_frequency = 1
@@ -17,7 +17,7 @@ def train_agent():
     import tensorflow as tf
     print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
-    model_file = "dqn_model_checkpoint.weights.h5"
+    model_file = "model_checkpoint.weights.h5"
 
     if os.path.exists(model_file):
         print(f"Loading model from {model_file}")

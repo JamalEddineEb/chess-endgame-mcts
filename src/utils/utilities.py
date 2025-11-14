@@ -28,18 +28,6 @@ def gumbel_top_k_root_candidates(root, k):
     return top_k_children
 
 
-
-def puct_select_child(node, c_puct):
-    best, best_score = None, -float('inf')
-    sqrt_N = math.sqrt(max(1, node.visits))
-    for move, child in node.children.items():
-        Q = 0.0 if child.visits == 0 else (child.value_sum / child.visits)
-        U = c_puct * child.prior * (sqrt_N / (1 + child.visits))
-        score = Q + U
-        if score > best_score:
-            best, best_score = child, score
-    return best
-
 def select_child_sequential_policy(node):
     """
     Non-root selection using Equation 14:

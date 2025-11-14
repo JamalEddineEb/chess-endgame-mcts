@@ -13,7 +13,7 @@ batch_size = 128
 episodes = 50000
 target_update_frequency = 10
 checkpoint_frequency = 10
-model_file = "dqn_model_checkpoint.weights.h5"
+model_file = "model_checkpoint.weights.h5"
 move_mapping_file = "move_mapping.json"
 print(f"Loading model from {model_file}")
 agent.load(model_file)

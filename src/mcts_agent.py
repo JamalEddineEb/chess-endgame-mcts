@@ -122,6 +122,10 @@ class MCTSAgent():
         
         # Force candidate move
         env.step(candidate_move)
+        next_state, reward, done = env.step(candidate_move)
+        self.remember(env.get_state(), candidate_move, reward, next_state, done)
+
+
         path.append(child)
         node = child
         
@@ -133,7 +137,9 @@ class MCTSAgent():
         # Selection with deterministic sequential policy
         while node.expanded and not env.done and depth < depth_limit:
             node = select_child_sequential_policy(node)  # <-- Equation 14
-            env.step(node.move)
+            next_state, reward, done = env.step(node.move)
+            self.remember(env.get_state(), candidate_move, reward, next_state, done)
+
             path.append(node)
             depth += 1
 
