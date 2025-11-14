@@ -4,12 +4,14 @@ import numpy as np
 from src.utils.move_mapping import MoveMapping
 
 class MCTSNode:
+    slots = ("parent","children","visits","value","prior","move","expanded")
     def __init__(self,prior=0,move=None):
         self.children = {}
         self.visits = 0
         self.value = 0
         self.prior = prior
         self.move = move
+        self.expanded = False
 
 
     def is_fully_expanded(self):
@@ -71,6 +73,7 @@ class MCTSNode:
             priors[mv] /= total_p
 
         self.expand(legal_moves, priors) 
+        self.expanded = True
         return value
 
     def update(self, value):

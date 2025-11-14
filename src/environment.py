@@ -16,12 +16,6 @@ class RookKingEnv:
         self.steps = 0
         self.demo_mode = demo_mode
         self.renderer = ChessRenderer()
-        self.moves_played = 0
-        # if demo_mode:
-        #     self.root = Tk()
-        #     self.canvas = Canvas(self.root, width=400, height=400)
-        #     self.canvas.pack()
-        #     self.board_display = display(SVG(chess.svg.board(self.board, size=400)), display_id=True)
         self.reset()
 
     def reset(self):
@@ -264,16 +258,12 @@ class RookKingEnv:
         return state
 
     def go_back(self, baseline):
-        while self.moves_played>baseline:
+        while len(self.board.move_stack)>baseline:
             self.board.pop()
-            self.moves_played -= 1
 
 
     def step(self, action):
-        self.moves_played+=2
         if action not in self.board.legal_moves:
-            # self.renderer.render_board(self.board)
-            # print("stupid move : ", action)
             return self.get_state(), -10, True
 
         self.board.push(action)

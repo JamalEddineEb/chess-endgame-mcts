@@ -1,6 +1,7 @@
 import numpy as np
 import math
 
+from src.mcts_node import MCTSNode
 from src.utils.move_mapping import MoveMapping, gather_legal_logits
 
 
@@ -38,6 +39,26 @@ def puct_select_child(node, c_puct):
         if score > best_score:
             best, best_score = child, score
     return best
+
+def select_child_sequential_policy(node):
+    """
+    Non-root selection using Equation 14:
+    argmax_a (π′(a) - N(a) / (1 + Σ_b N(b)))
+    where π′(a) is the policy prior (stored in node.priors_cache).
+    """
+    total_visits = sum(ch.visits for ch in node.children.values())
+
+    denom = 1.0 + total_visits
+    
+    best_score = -1e9
+    for child in node.children.values():
+        n = 0 if child is None else child.visits
+        score = child.prior - (n / denom)
+        if score > best_score:
+            best_score = score
+            best_child = child
+    return best_child
+
 
 
 def ceil_log2(x):

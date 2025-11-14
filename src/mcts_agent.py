@@ -116,51 +116,29 @@ class MCTSAgent():
         return [node for node, _ in sorted_moves[:n_keep]]
     
 
-    def rollout_from_candidate(self,root, child, env, candidate_move, depth_limit=64):
-        """
-        Perform one MCTS rollout starting from candidate_move (child of root)
-        """
+    def rollout_from_candidate(self, root, child, env, candidate_move, depth_limit=64):
         path = [root]
-        state = env.get_state()
-        base_line = env.moves_played
-
-        # Step env with candidate move
-        next_state, reward, done = env.step(candidate_move)
-
-        self.remember(state, candidate_move, reward, next_state, done)
+        depth0 = len(env.board.move_stack)  # snapshot before rollout
+        
+        # Force candidate move
+        env.step(candidate_move)
         path.append(child)
-
-        # Selection down the tree
         node = child
-        node.expand_leaf(env, self.model)
+        
+        # Expand child if not already
+        if not node.expanded:
+            _ = node.expand_leaf(env, self.model)
+        
         depth = 1
-        while node.children and all(ch.visits > 0 for ch in node.children.values()) \
-                and not done and depth < depth_limit:
-            node = puct_select_child(node, self.c_puct)
-            next_state, reward, done = env.step(node.move)
-            
+        # Selection with deterministic sequential policy
+        while node.expanded and not env.done and depth < depth_limit:
+            node = select_child_sequential_policy(node)  # <-- Equation 14
+            env.step(node.move)
             path.append(node)
             depth += 1
 
-        # Expansion & backup
-        if done:
-            leaf_value = float(reward)
-            backup_path(path, leaf_value)
-        elif not node.children:
-            leaf_value = node.expand_leaf(env, self.model)
-            backup_path(path, leaf_value)
-        else:
-            unvisited = [ch for ch in node.children.values() if ch.visits == 0]
-            if unvisited:
-                u = random.choice(unvisited)
-                next_state, reward, done = env.step(u.move)
-                path.append(u)
-                leaf_value = float(reward) if done else u.expand_leaf(env, self.model)
-            else:
-                leaf_value = node.expand_leaf(env, self.model)
-            backup_path(path, leaf_value)
-
-        env.go_back(base_line)
+        # Rewind exactly
+        env.go_back(depth0)
 
 
     def simulate(self, env, k_root=16):
