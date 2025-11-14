@@ -6,7 +6,7 @@ from keras import layers, models
 import json
 
 from src.environment import RookKingEnv
-from src.node import MCTSNode
+from src.mcts_node import MCTSNode
 from src.utils.utilities import *
 
 class MCTSAgent():
@@ -85,8 +85,8 @@ class MCTSAgent():
         return state
     
 
-    def act(self, fen):
-        root = MCTSNode(chess.Board(fen))
+    def act(self):
+        root = MCTSNode()
         best_move = self.simulate(root)
 
         return best_move.move
@@ -121,15 +121,12 @@ class MCTSAgent():
         Perform one MCTS rollout starting from candidate_move (child of root)
         """
         path = [root]
-        env.board = root.board.copy()
         state = env.get_state()
 
         # Step env with candidate move
         next_state, reward, done = env.step(candidate_move)
 
         self.remember(state, candidate_move, reward, next_state, done)
-        if child.board is None:
-            child.board = env.board.copy()
         path.append(child)
 
         # Selection down the tree
@@ -139,8 +136,6 @@ class MCTSAgent():
                 and not done and depth < depth_limit:
             node = puct_select_child(node, self.c_puct)
             next_state, reward, done = env.step(node.move)
-            if node.board is None:
-                node.board = env.board.copy()
             path.append(node)
             depth += 1
 
@@ -156,8 +151,6 @@ class MCTSAgent():
             if unvisited:
                 u = random.choice(unvisited)
                 next_state, reward, done = env.step(u.move)
-                if u.board is None:
-                    u.board = env.board.copy()
                 path.append(u)
                 leaf_value = float(reward) if done else u.expand_leaf(env, self.model)
                 backup_path(path, leaf_value)
@@ -172,8 +165,6 @@ class MCTSAgent():
         Root-level MCTS simulation with Gumbel-top-k and Sequential Halving.
         """
         env = RookKingEnv()
-        env.board = root.board.copy()
-
         root.expand_leaf(env, self.model)
 
         candidates = gumbel_top_k_root_candidates(

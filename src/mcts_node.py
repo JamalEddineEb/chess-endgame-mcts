@@ -4,9 +4,7 @@ import numpy as np
 from src.utils.move_mapping import MoveMapping
 
 class MCTSNode:
-    def __init__(self, board,parent=None, prior=0,move=None):
-        self.board = board
-        self.parent = parent
+    def __init__(self,prior=0,move=None):
         self.children = {}
         self.visits = 0
         self.value = 0
@@ -47,7 +45,7 @@ class MCTSNode:
     def expand(self, legal_moves, priors):
         for move in legal_moves:
             if move not in self.children:
-                self.children[move] = MCTSNode(board=None,parent=self, prior=priors.get(move,0.0),move=move)
+                self.children[move] = MCTSNode(prior=priors.get(move,0.0),move=move)
 
     def expand_leaf(self, env, model):
         move_mapping = MoveMapping()
