@@ -1,4 +1,3 @@
-import chess
 import random
 import json
 import numpy as np
@@ -17,12 +16,9 @@ model_file = "model_checkpoint.weights.h5"
 move_mapping_file = "move_mapping.json"
 print(f"Loading model from {model_file}")
 agent.load(model_file)
-agent.load_move_mapping(move_mapping_file)
 env = RookKingEnv(stage=2)
 renderer = ChessRenderer(gui_mode=True)
 
-with open(move_mapping_file, "r") as file:
-    move_mapping = json.load(file)
 def random_move(board):
     """Select a random legal move from the board."""
     legal_moves = list(board.legal_moves)
@@ -38,7 +34,7 @@ def play_game(agent):
         time.sleep(1)  # Pause for visibility
         
         # Use the agent's act method to determine the action
-        action = agent.act() 
+        action = agent.act(env) 
 
         print(f"Agent's move: {action}")
 

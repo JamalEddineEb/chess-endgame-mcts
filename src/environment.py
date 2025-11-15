@@ -264,6 +264,7 @@ class RookKingEnv:
 
     def step(self, action):
         if action not in self.board.legal_moves:
+            print("wrong move : ", action)
             return self.get_state(), -10, True
 
         self.board.push(action)
@@ -296,6 +297,7 @@ class RookKingEnv:
                   self.renderer.render_board(self.board)
                 self.steps+=1
                 if self.board.is_stalemate() or self.board.is_game_over():
+                    print("finito")
                     self.done = True
 
         return self.get_state(), reward, self.done

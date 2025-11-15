@@ -1,14 +1,13 @@
 import chess
 import numpy as np
-import random
+import json
 from collections import deque
 from keras import layers, models
-import json
 
-from src.chess_renderer import ChessRenderer
-from src.environment import RookKingEnv
 from src.mcts_node import MCTSNode
 from src.utils.utilities import *
+from src.utils.move_mapping import MoveMapping
+
 
 class MCTSAgent():
     def __init__(self, state_size, c_puct=1000.0, n_simulations=50):
@@ -121,7 +120,6 @@ class MCTSAgent():
         depth0 = len(env.board.move_stack)  # snapshot before rollout
         
         # Force candidate move
-        env.step(candidate_move)
         next_state, reward, done = env.step(candidate_move)
         self.remember(env.get_state(), candidate_move, reward, next_state, done)
 
@@ -223,7 +221,7 @@ class MCTSAgent():
 
         current_value = target_value
 
-        self.model.fit(states, [current_policy, current_value], epochs=5, verbose=1)
+        self.model.fit(states, [current_policy, current_value], epochs=15, verbose=1)
         self.memory.clear()
 
 
@@ -234,12 +232,4 @@ class MCTSAgent():
     def save(self, name):
         self.model.save_weights(name)
 
-    def save_move_mapping(self, filename="move_mapping.json"):
-        with open(filename, 'w') as f:
-            json.dump({k: str(v) for k, v in self.move_mapping.items()}, f)
 
-    def load_move_mapping(self, filename="move_mapping.json"):
-        with open(filename, 'r') as f:
-            move_mapping_loaded = json.load(f)
-            self.move_mapping = {k: int(v) for k, v in move_mapping_loaded.items()}
-            self.reverse_move_mapping = {v: k for k, v in self.move_mapping.items()}

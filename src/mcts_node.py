@@ -14,10 +14,6 @@ class MCTSNode:
         self.expanded = False
 
 
-    def is_fully_expanded(self):
-        return len(self.children) > 0 and all(child.visits > 0 for child in self.children.values())
-
-
     def expand(self, legal_moves, priors):
         for move in legal_moves:
             if move not in self.children:
