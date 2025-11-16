@@ -15,7 +15,6 @@ class RookKingEnv:
         self.mates = 0
         self.steps = 0
         self.demo_mode = demo_mode
-        self.renderer = ChessRenderer()
         self.reset()
 
     def reset(self):
@@ -279,28 +278,20 @@ class RookKingEnv:
             reward = 150.0
             self.mates += 1
             self.done = True
-            self.steps+=1
         elif self.board.is_stalemate() or self.board.is_game_over():
             reward = -100.0
             self.done = True
         if self.board.is_insufficient_material():
             reward = -180.0
             self.done = True
-        else:
-            # Reward for good positioning
-            reward += self.calculate_position_reward()
-
-            # Make opponent's move
-            if not self.done:
-                self.opponent_move()
-                if self.demo_mode:
-                  self.renderer.render_board(self.board)
-                self.steps+=1
-                if self.board.is_stalemate() or self.board.is_game_over():
-                    print("finito")
-                    self.done = True
 
         return self.get_state(), reward, self.done
+    
+    def oponent_step(self):
+        if not self.done:
+            self.opponent_move()
+            if self.board.is_stalemate() or self.board.is_game_over():
+                self.done = True
 
     def calculate_position_reward(self):
         reward = -20.0

@@ -1,53 +1,73 @@
 import random
 import json
+import sys
 import numpy as np
-import time
+from PyQt5.QtWidgets import QApplication
+from PyQt5.QtCore import QTimer
+
 from src.mcts_agent import MCTSAgent
 from src.environment import RookKingEnv
 from src.chess_renderer import ChessRenderer
 
+# --- setup ---
 state_size = 8 * 8 * 3  # 8x8 board with 3 channels
-agent = MCTSAgent(state_size,c_puct=0.2)
-batch_size = 128
-episodes = 50000
-target_update_frequency = 10
-checkpoint_frequency = 10
+agent = MCTSAgent(state_size, c_puct=0.2)
+
 model_file = "model_checkpoint.weights.h5"
-move_mapping_file = "move_mapping.json"
 print(f"Loading model from {model_file}")
 agent.load(model_file)
+
 env = RookKingEnv(stage=2)
-renderer = ChessRenderer(gui_mode=True)
 
-def random_move(board):
-    """Select a random legal move from the board."""
-    legal_moves = list(board.legal_moves)
-    return random.choice(legal_moves) if legal_moves else None
+# --- Qt app / UI ---
+app = QApplication.instance() or QApplication(sys.argv)
+renderer = ChessRenderer(env.board)
+renderer.show()
+renderer.update_board()  # initial paint
 
-def play_game(agent):
-    """Play a game with the model vs a random opponent."""
-    renderer.render_board(env.board)
-    done = False
-    step = 0
-    while not done:
-        print(done," not done")
-        time.sleep(1)  # Pause for visibility
-        
-        # Use the agent's act method to determine the action
-        action = agent.act(env) 
+MOVE_DELAY_MS = 800  # visual pacing between moves
 
-        print(f"Agent's move: {action}")
+def play_step():
+    # 1) Stop if terminal before agent moves
+    if env.board.is_game_over():
+        print(f"Game over: {env.board.result()}")
+        return
 
-        env.step(action)
-        renderer.render_board(env.board)  # Show the board after the agent's move
+    # 2) Agent move (consider offloading if slow)
+    action = agent.act(env)
+    if action is None:
+        print("Agent returned no move; stopping.")
+        return
+    env.step(action)
+    renderer.update_board()
 
-        step += 1
+    # 3) Check terminal after agent move
+    if env.board.is_game_over():
+        print(f"Game over: {env.board.result()}")
+        return
 
-    if env.board.is_checkmate():
-        print("Checkmate! The model wins!")
-    elif env.board.is_stalemate():
-        print("Stalemate! It's a draw.")
-    else:
-        print("Game over!")
+    # 4) Delay a bit for readability, then opponent move
+    def do_opponent():
+        # Opponent move; handle failure gracefully
+        try:
+            env.oponent_step()  # must perform one legal move for the side to move
+        except Exception as e:
+            print("Opponent step failed:", e)
+            return
+        renderer.update_board()
 
-play_game(agent) 
+        # 5) Check terminal after opponent move
+        if env.board.is_game_over():
+            print(f"Game over: {env.board.result()}")
+            return
+
+        # 6) Schedule next agent turn
+        QTimer.singleShot(MOVE_DELAY_MS, play_step)
+
+    QTimer.singleShot(MOVE_DELAY_MS, do_opponent)
+
+
+# start loop after small delay so first frame shows
+QTimer.singleShot(MOVE_DELAY_MS, play_step)
+
+sys.exit(app.exec_())
