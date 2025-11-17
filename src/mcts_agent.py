@@ -97,6 +97,7 @@ class MCTSAgent():
         # Run rollouts for each candidate
         for node in candidates:
             child = root.children[node.move]
+            print(node.move)
             for _ in range(budget_per_candidate):
                 self.rollout_from_candidate(root, child, env, node.move)
 
@@ -123,6 +124,7 @@ class MCTSAgent():
         next_state, reward, done = env.step(candidate_move)
         self.remember(env.get_state(), candidate_move, reward, next_state, done)
 
+        env.oponent_step()
 
         path.append(child)
         node = child
@@ -137,9 +139,15 @@ class MCTSAgent():
             node = select_child_sequential_policy(node)  # <-- Equation 14
             next_state, reward, done = env.step(node.move)
             self.remember(env.get_state(), candidate_move, reward, next_state, done)
+            env.oponent_step()
+
 
             path.append(node)
+            node.expand_leaf(env, self.model)
             depth += 1
+
+        if depth>10:
+            print("depth : ",depth, candidate_move)
 
         # Rewind exactly
         env.go_back(depth0)
@@ -221,7 +229,7 @@ class MCTSAgent():
 
         current_value = target_value
 
-        self.model.fit(states, [current_policy, current_value], epochs=15, verbose=1)
+        self.model.fit(states, [current_policy, current_value], epochs=30, verbose=1)
         self.memory.clear()
 
 

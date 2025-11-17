@@ -257,6 +257,7 @@ class RookKingEnv:
         return state
 
     def go_back(self, baseline):
+        self.done = False
         while len(self.board.move_stack)>baseline:
             self.board.pop()
 
@@ -264,6 +265,7 @@ class RookKingEnv:
     def step(self, action):
         if action not in self.board.legal_moves:
             print("wrong move : ", action)
+            print(self.board)
             return self.get_state(), -10, True
 
         self.board.push(action)
@@ -272,7 +274,7 @@ class RookKingEnv:
           self.renderer.render_board(self.board)
         reward = -0.5
 
-        # More nuanced reward structure
+        # reward structure
         if self.board.is_checkmate():
             print("checkmate!!!!!!!!!")
             reward = 150.0

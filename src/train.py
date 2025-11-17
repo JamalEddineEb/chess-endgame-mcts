@@ -6,10 +6,9 @@ from src.chess_renderer import ChessRenderer
 
 def train_agent():
     env = RookKingEnv(stage=2,demo_mode=False)
-    chess_renderer = ChessRenderer()
     state_size = 8 * 8 * 3  # 8x8 board with 3 channels
     agent = MCTSAgent(state_size)
-    batch_size = 600
+    batch_size = 1000
     episodes = 500
     target_update_frequency = 2
     checkpoint_frequency = 1
@@ -28,7 +27,6 @@ def train_agent():
 
     for e in range(episodes):
         env.reset()
-        chess_renderer.render_board(env.board)
         total_reward = 0
         moves_made = 0
         print("episode ",e)
@@ -36,17 +34,18 @@ def train_agent():
         while True:
             action = agent.act(env)
             print("real one")
-            chess_renderer.render_board(env.board)
             state = env.get_state()
             next_state, reward, done = env.step(action)
-            print(state==next_state)
 
             agent.remember(state, action, reward, next_state, done)
             total_reward += reward
             moves_made += 1
-            chess_renderer.render_board(env.board)
+
+            env.oponent_step()
 
             print(moves_made,"moves made\n\n\n")
+            print(env.board)
+            print(done)
 
             if done or moves_made > 5:  # Prevent infinite games
                 print(f"Episode: {e}/{episodes}, Score: {total_reward}, epsilon: {agent.epsilon}")
