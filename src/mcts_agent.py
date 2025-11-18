@@ -10,9 +10,8 @@ from src.utils.move_mapping import MoveMapping
 
 
 class MCTSAgent():
-    def __init__(self, state_size, c_puct=1000.0, n_simulations=50):
+    def __init__(self, state_size, n_simulations=20):
         self.state_size = state_size
-        self.c_puct = c_puct
         self.memory = deque(maxlen=10000)
         self.n_simulations = n_simulations
         self.move_mapping = MoveMapping()
@@ -64,8 +63,6 @@ class MCTSAgent():
 
     def update_target_model(self):
         self.target_model.set_weights(self.model.get_weights())
-
-
 
     def get_state(self, board):
         # Create a more informative state representation
@@ -136,9 +133,13 @@ class MCTSAgent():
         depth = 1
         # Selection with deterministic sequential policy
         while node.expanded and not env.done and depth < depth_limit:
-            node = select_child_sequential_policy(node)  # <-- Equation 14
+            root = node
+
+            node = select_child_sequential_policy(node) 
+            prev_state = env.get_state()
             next_state, reward, done = env.step(node.move)
-            self.remember(env.get_state(), candidate_move, reward, next_state, done)
+
+            self.remember(prev_state, node.move, reward, next_state, done)
             env.oponent_step()
 
 
@@ -153,7 +154,7 @@ class MCTSAgent():
         env.go_back(depth0)
 
 
-    def simulate(self, env, k_root=16):
+    def simulate(self, env, k_root=4):
         """
         Root-level MCTS simulation with Gumbel-top-k and Sequential Halving.
         """
@@ -173,9 +174,12 @@ class MCTSAgent():
 
         for phase_number in range(P):
             n_candidates = len(current_candidates)
+            print(phase_number, n_candidates, "candidates")
+
             if n_candidates <= 1:
                 break
             budget_per_candidate = max(1, self.n_simulations // (P*k_root*2**phase_number))
+            print(budget_per_candidate, n_candidates, "aa")
             current_candidates = self.sequential_halving_phase(root, current_candidates, env, budget_per_candidate)
             
 
@@ -187,6 +191,9 @@ class MCTSAgent():
 
 
     def remember(self, state, action, reward, next_state, done):
+
+        if len(self.memory)%50==0:
+            print("memo : ",len(self.memory))
         self.memory.append((state, action, reward, next_state, done))
 
     def replay(self, batch_size):
@@ -229,7 +236,7 @@ class MCTSAgent():
 
         current_value = target_value
 
-        self.model.fit(states, [current_policy, current_value], epochs=30, verbose=1)
+        self.model.fit(states, [current_policy, current_value], epochs=30, batch_size=16, verbose=1)
         self.memory.clear()
 
 

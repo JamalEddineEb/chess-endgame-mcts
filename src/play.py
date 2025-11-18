@@ -11,7 +11,7 @@ from src.chess_renderer import ChessRenderer
 
 # --- setup ---
 state_size = 8 * 8 * 3  # 8x8 board with 3 channels
-agent = MCTSAgent(state_size, c_puct=0.2)
+agent = MCTSAgent(state_size, n_simulations=2)
 
 model_file = "model_checkpoint.weights.h5"
 print(f"Loading model from {model_file}")

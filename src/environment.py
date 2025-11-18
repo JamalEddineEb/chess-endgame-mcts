@@ -265,7 +265,7 @@ class RookKingEnv:
     def step(self, action):
         if action not in self.board.legal_moves:
             print("wrong move : ", action)
-            print(self.board)
+            print(self.board.unicode())
             return self.get_state(), -10, True
 
         self.board.push(action)
