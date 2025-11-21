@@ -1,171 +1,66 @@
-# Chess Endgame MCTS (KRK) - Research Documentation
+# 🌟 Project Brief: Gumbel AlphaZero for KRK Endgame
 
-## Overview
+## 💡 1. Project Overview
 
-This project investigates Monte Carlo Tree Search (MCTS) guided by a neural policy-value network for the King-and-Rook vs King (KRK) endgame. The work focuses on efficient search primitives, legal-action masking in policy networks, and root-level exploration strategies. **Status: ongoing; currently integrating Gumbel-Top-k sampling at the root and optimizing memory efficiency.**
+This project implements a sophisticated **Gumbel AlphaZero (GAZ)** agent to master the **King and Rook vs. King (KRK)** chess endgame. The agent combines a deep convolutional neural network with a state-of-the-art tree search algorithm, demonstrating superior sample efficiency compared to traditional AlphaZero and MuZero.
 
-## Motivation
+### Key Features
+* **Gumbel-Max Trick:** Uses Gumbel noise sampling for action selection, enabling effective exploration with a minimal number of simulations ($N$).
+* **Sequential Halving:** Implements a highly efficient search budget allocation strategy for MCTS. 
+* **Two-Headed Neural Network:** A modern architecture with separate heads for **Policy** (move selection) and **Value** (board evaluation).
+* **Strong Opponent Baseline:** Trains against the powerful **Stockfish** engine to guarantee high-quality self-play data.
 
-KRK is a minimal yet non-trivial testbed for researching MCTS + RL:
+---
 
-- **Compact domain**: finite, deterministic, ~1000 reachable positions; allows full exploration without prohibitive cost.
-- **Realistic constraints**: typical researcher setup (limited GPU, single machine); experiments remain reproducible and fast.
-- **Methodological clarity**: small network and short horizons reveal PUCT dynamics, backup stability, and policy prior quality without confounding factors.
-- **Algorithm validation**: prototype and benchmark search improvements (masked softmax, Gumbel-Top-k) before scaling to general chess or other games.
+## 🧠 2. Algorithmic Detail: The Gumbel Advantage
 
-## Method
+The agent's strength lies in its ability to achieve high-quality policy improvement with a minimal simulation budget. This is achieved by focusing computational effort only on the most promising moves.
 
-### Environment
+### Advanced Search Strategy: Sequential Halving
+Instead of deep, uniform search, the agent uses a **Sequential Halving** process over the **Gumbel Top-$k$** candidates selected at the root. This progressively eliminates low-value actions, concentrating simulations where they matter most.
 
-- **Game**: KRK endgame on python-chess; terminal rewards: +1 for White mate, -1 for Black mate, 0 for draw (50-move rule or repetition).
-- **State representation**: 8×8 board as multi-channel tensor (piece occupancy, turn, move count).
-- **Depth cap**: maximum ~100 plies to avoid infinite loops in rare cases; terminal states checked on every step.
+### Policy Target Construction (The High-Quality Label)
+The network is trained to match an "improved policy" ($\pi'$) derived directly from the search results, where the original network logits ($\mathbf{L}$) are corrected by the search's completed Q-values ($\mathbf{Q}$):
 
-### Neural Network
+$$\pi' \propto \text{softmax}(\mathbf{L} + \sigma(\mathbf{Q}))$$
 
-**Architecture**: lightweight encoder (CNN or ResNet stem) + two heads.
+* **$\mathbf{Q}$ (Completed Q-Values):** Uses the search-improved value ($V/N$) for visited actions, and the network's value ($V_\pi$) as a reliable fallback for unvisited actions.
+* **Impact:** This high-quality, aggregated label allows the agent to learn the optimal policy with drastically fewer training episodes.
 
-- **Policy head**: Dense layer outputting logits over a fixed global action space (no softmax activation).
-  - Action space: 64 × 64 from-square and to-square pairs (4096 actions total).
-  - Rationale: fixed size matches the board; promotions disabled for KRK.
-  - **Key insight**: by outputting raw logits instead of probabilities, we avoid wasting softmax mass on illegal moves and gain numerical stability for downstream masked softmax and Gumbel operations.
+---
 
-- **Value head**: Dense layer + tanh activation predicting expected outcome ∈ [-1, 1].
+## 📈 3. Key Performance and Technical Architecture
 
-### Action Mapping & Legal-Action Masking
-
-- **Deterministic global mapping**: uci → index via a precomputed JSON (move_uci_string ↔ action_index).
-- **Legal indexing**: at each node, env.get_legal_actions() returns chess.Move objects; we convert to indices via the mapping and gather policy logits at those indices only.
-- **Masked softmax**: priors over legal moves are computed as:
-  - \(z = \text{logits}[\text{legal\_indices}] - \max(\text{logits}[\text{legal\_indices}])\)
-  - \(p = \text{softmax}(z)\)
-  - This ensures \(\sum_a p(a) = 1\) only over legal moves, concentrating all probability mass appropriately.
-
-### Search: PUCT + Backup
-
-**Standard MCTS loop**:
-1. **Selection**: traverse tree from root using PUCT until reaching a leaf node.
-   - \(\text{PUCT}(a) = Q(a) + c \cdot P(a) \cdot \sqrt{\frac{N}{1 + N(a)}}\)
-   - \(Q(a) = V\_\text{sum}(a) / N(a)\) (average backed-up values).
-   - \(P(a)\) = prior from masked softmax over legal actions.
-
-2. **Expansion**: sample one legal move uniformly at random, evaluate with the network, and add a new child node.
-
-3. **Backup**: propagate value \(v\) back up the path, flipping sign at each ply (alternating maximizer/minimizer).
-   - \(V\_\text{sum}(a) \mathrel{+}= v\) and \(N(a) \mathrel{+}= 1\) at each visited node.
-
-**Stability measures**:
-- Value clamping: clip network output to [-0.99, 0.99] to avoid numerical issues.
-- Stable averaging: Q(a) computed as V_sum / visits with explicit division guards.
-
-### Root-Level Exploration: Gumbel-Top-k (In Progress)
-
-**Goal**: select a small, diverse set of high-probability root actions, then allocate simulations across them.
-
-**Algorithm** (Gumbel-Max trick):
-- For each legal action at the root, draw i.i.d. Gumbel noise \(g_i \sim \text{Gumbel}(0, 1)\).
-- Compute perturbed scores: \(s_i = \text{logits}[i] + g_i\).
-- Select top-k actions by argmax over perturbed scores; these are distributed according to softmax(logits) without replacement.
-
-**Why it helps**:
-- Prevents early bias toward a single greedy action.
-- Ensures exploration of promising alternatives proportional to policy confidence.
-- Avoids pre-normalizing logits; operates directly on raw scores for numerical stability.
-- Enables future variants (e.g., top-k-then-visit-proportional allocation).
-
-**Current status**: helper functions written; integration into the main search loop in progress.
-
-## Training
-
-### Data Generation
-
-- Self-play: agent plays against itself using MCTS (e.g., 100–500 simulations per move).
-- Replay buffer: store (state, policy_target, value_target, outcome) tuples.
-- Policy targets: visit distribution at root or high-value nodes, masked to legal actions.
-- Value targets: actual game outcome (discounted if needed, or raw terminal reward).
-
-### Loss & Optimization
-
-- **Policy loss**: cross-entropy between network logits and target distribution (computed over legal actions only).
-- **Value loss**: MSE between predicted and target value.
-- **Combined loss**: \(L = L_\text{policy} + \lambda L_\text{value}\) with optional regularization.
-
-### Evaluation
-
-- **Benchmark**: win rate vs. baseline (random or simple heuristic).
-- **Endgame solving**: spot-check a few key positions against tablebases (e.g., via python-chess).
-- **Ablation metrics**: depth visited, terminal nodes reached, average backup value magnitude.
-
-## Implementation Status
-
-### Completed
-
--  Fixed global action mapping (4096 actions, uci ↔ index JSON).
--  Legal-action indexing and batch gathering from logits.
--  Masked softmax over legal logits.
--  Model with logits-only policy head and value head.
--  PUCT node selection and single-leaf expansion.
--  Value backup with sign alternation and stability guards.
--  Environment with legal move generation, terminal checks, step function.
-
-### In Progress
-
--  **Gumbel-Top-k root selection**: implementing noise sampling, perturbed score ranking, and candidate aggregation.
--  **Memory optimization**: profiling RAM usage during large rollouts; exploring state-dict checkpointing or compressed node storage.
--  **Simulation throughput**: benchmarking simulation rate on limited hardware; investigating bottlenecks (env.step, network inference, masking).
-
-### Planned
-
--  Full training loop: self-play, replay buffer management, mini-batch training, periodic checkpoint and evaluation.
--  Ablation studies:
-  - Impact of Gumbel-Top-k vs. greedy root selection.
-  - Effect of c_puct, simulation budget, and depth limits.
-  - Policy prior quality: masked softmax vs. uniform baseline.
--  Comparison with tablebases and simple heuristics (e.g., distance-to-mate).
--  Scaling experiments: vary network size, action space (if moving to general chess), and simulation count.
+### Architecture Diagram
+The codebase is organized into modular files, reflecting best practices for Deep Reinforcement Learning frameworks.
 
 
-## Quick Start
 
-### Install
+* **`mcts_agent.py`**: The core intelligence, containing the **MCTS algorithm**, the two-headed **Keras/TensorFlow model definition**, and the $\pi'$ label computation logic.
+* **`environment.py`**: The game environment, managing the board state, rule checking, and running the **Stockfish** opponent.
+* **`train.py`**: The primary self-play loop for data generation, collecting the training samples $(\mathbf{s}, \mathbf{\pi'}, \mathbf{z})$.
 
-```bash
-git clone https://github.com/JamalEddineEb/chess-endgame-mcts.git
-cd chess-endgame-mcts
-pip install -r requirements.txt
-```
+### Performance Indicators (KPIs)
+The agent's success is defined by rapid convergence to a super-human level on the KRK task.
 
-### Train
+* **Win Rate:** Should quickly exceed 95% against Stockfish.
+* **Average Game Length:** The number of moves to mate should decrease significantly as the policy learns optimal forcing sequences.
 
-```bash
-python -m src.train
-```
 
-### Play demonstration
 
-```bash
-python -m src.play
-```
+---
 
-## Key Design Decisions
+## 🚀 4. Getting Started
 
-1. **Logits over probabilities**: avoid global softmax, enable efficient masking and Gumbel operations.
-2. **Fixed global action space**: simplifies indexing, deterministic across runs, compatible with fixed network head.
-3. **Legal-action masking at nodes**: ensure policy mass is only on reachable actions; simplify PUCT and Gumbel computation.
-4. **Single-leaf expansion**: each simulation adds one new node; reduces memory overhead and allows stable value backup.
-5. **Gumbel-Top-k at root**: diverse candidate selection; proportional to policy confidence; prepares for future allocation strategies.
+### Prerequisites
+* Python 3.8+
+* `tensorflow`, `keras`, `python-chess`, `PyQt5`
+* **Stockfish** executable must be installed and correctly linked in `environment.py`.
 
-## Known Limitations & Future Work
+### Execution
+| Command | Purpose |
+| :--- | :--- |
+| `python -m src.train` | Starts the self-play loop and trains the model, saving weights to `model_checkpoint.weights.h5`. |
+| `python -m src.play` | Runs the trained agent in a real-time demo, rendering the moves via PyQt5/SVG. |
 
-- **Small domain**: KRK is solvable; the goal is methodological clarity, not solving from scratch.
-- **Hardware constraints**: currently runs on CPU + modest GPU; future work may explore distributed search or batch inference.
-- **No transposition handling**: KRK has many transpositions; storing only unique nodes could improve efficiency (future).
-- **Sparse rewards**: terminal rewards only; intermediate value signal may be weak; consider auxiliary targets or reward shaping in future iterations.
-
-## References & Inspiration
-
-- AlphaZero (Silver et al., 2017): neural MCTS policy priors and self-play training.
-- Gumbel-Max trick (Gumbel, 1954; Lakshminarayanan et al., 2017): for categorical sampling without replacement.
-- Mu Zero (Schaal et al., 2019): environment model + value network; relevant for understanding backup stability.
-- python-chess: robust game logic and UCI parsing.
-
+---

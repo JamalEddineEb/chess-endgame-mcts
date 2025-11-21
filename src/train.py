@@ -5,13 +5,13 @@ import random
 
 from src.mcts_agent import MCTSAgent
 from src.environment import RookKingEnv
-from src.chess_renderer import ChessRenderer
+
 
 def train_agent():
     env = RookKingEnv(stage=2,demo_mode=False)
     state_size = (8 , 8 , 3)  # 8x8 board with 3 channels
     agent = MCTSAgent(state_size)
-    batch_size = 50
+    batch_size = 10
     episodes = 500
     target_update_frequency = 2
     checkpoint_frequency = 1

@@ -10,7 +10,7 @@ class RookKingEnv:
     def __init__(self, stage=1,demo_mode=False):
         self.stage = stage
         self.board = chess.Board()
-        self.engine = chess.engine.SimpleEngine.popen_uci("/usr/games/stockfish")
+        self.engine = chess.engine.SimpleEngine.popen_uci("/usr/bin/stockfish")
         self.engine.configure({"Skill Level": 20})
         self.mates = 0
         self.steps = 0

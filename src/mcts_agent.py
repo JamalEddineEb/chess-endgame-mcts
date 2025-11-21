@@ -321,12 +321,6 @@ class MCTSAgent():
         return best_child.move, improved_policy, v_pi
 
 
-    def remember(self, state, action, reward, next_state, done):
-
-        if len(self.memory)%50==0:
-            print("memo : ",len(self.memory))
-        self.memory.append((state, action, reward, next_state, done))
-
     def replay(self, batch_size):
         if len(self.memory) < batch_size:
             print(len(self.memory), "memory < batch_size; skipping replay")
@@ -348,9 +342,6 @@ class MCTSAgent():
             epochs=1,
             verbose=1,
         )
-
-        # Optionally clear or keep memory; for endgames you can clear
-        self.memory.clear()
 
 
 
