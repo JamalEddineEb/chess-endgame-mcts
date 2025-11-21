@@ -27,8 +27,8 @@ class MCTSAgent():
         self.update_target_model()
 
     def _build_model(self):
-        # Input layer for an 8x8 chessboard with 3 channels
-        input_layer = layers.Input(shape=(8, 8, 3))
+        # Input layer for an 8x8 chessboard with 12 channels (one for each piece type per color)
+        input_layer = layers.Input(shape=(8, 8, 12))
 
         # Convolutional Block 1
         x = layers.Conv2D(filters=128, kernel_size=(3, 3), activation='relu', padding='same')(input_layer)
@@ -49,7 +49,8 @@ class MCTSAgent():
         x = layers.Flatten()(x)
 
         # Policy head for move selection 
-        policy_output = layers.Dense(len(chess.SQUARES) * len(chess.SQUARES), activation='softmax', name='policy')(x)
+        # Output size matches the global move mapping (including promotions)
+        policy_output = layers.Dense(self.move_mapping.num_actions, activation='softmax', name='policy')(x)
 
         # Value head for estimating the value of the current board state
         value_output = layers.Dense(1, activation='tanh', name='value')(x)
@@ -64,19 +65,22 @@ class MCTSAgent():
         self.target_model.set_weights(self.model.get_weights())
 
     def get_state(self, board):
-        # Create a more informative state representation
-        state = np.zeros((8, 8, 3), dtype=np.float32)  # 3 channels: WK, BK, WR
+        # (8, 8, 12) representation
+        # Channels 0-5: White P, N, B, R, Q, K
+        # Channels 6-11: Black P, N, B, R, Q, K
+        state = np.zeros((8, 8, 12), dtype=np.float32)
 
         for square in chess.SQUARES:
             piece = board.piece_at(square)
             if piece:
+                # 0-5 for White, 6-11 for Black
+                piece_idx = piece.piece_type - 1  # 0=P, 1=N, ..., 5=K
+                if piece.color == chess.BLACK:
+                    piece_idx += 6
+                
                 rank = 7 - chess.square_rank(square)
                 file = chess.square_file(square)
-                if piece.piece_type == chess.KING:
-                    channel = 0 if piece.color == chess.WHITE else 1
-                    state[rank, file, channel] = 1.0
-                elif piece.piece_type == chess.ROOK and piece.color == chess.WHITE:
-                    state[rank, file, 2] = 1.0
+                state[rank, file, piece_idx] = 1.0
 
         return state
     
@@ -351,10 +355,6 @@ class MCTSAgent():
             epochs=3,
             verbose=1,
         )
-
-
-
-
 
     def load(self, name):
         self.model.load_weights(name)

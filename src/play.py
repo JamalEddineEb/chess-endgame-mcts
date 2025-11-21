@@ -6,18 +6,22 @@ from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import QTimer
 
 from src.mcts_agent import MCTSAgent
-from src.environment import RookKingEnv
+from src.environment import ChessEnv
 from src.chess_renderer import ChessRenderer
 
 # --- setup ---
-state_size = 8 * 8 * 3  # 8x8 board with 3 channels
-agent = MCTSAgent(state_size, n_simulations=2)
+state_size = (8, 8, 12)  # 8x8 board with 12 channels
+agent = MCTSAgent(state_size, n_simulations=20)
 
 model_file = "model_checkpoint.weights.h5"
 print(f"Loading model from {model_file}")
-agent.load(model_file)
+try:
+    agent.load(model_file)
+except Exception as e:
+    print(f"Could not load model: {e}")
+    print("Starting with random weights.")
 
-env = RookKingEnv(stage=2)
+env = ChessEnv(demo_mode=False)
 
 # --- Qt app / UI ---
 app = QApplication.instance() or QApplication(sys.argv)
@@ -38,7 +42,7 @@ def play_step():
         print("No legal move; stopping.")
         return
 
-    env.step_with_opponent(move)
+    env.step(move)
     renderer.update_board()
 
     if env.board.is_game_over():

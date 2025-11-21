@@ -4,15 +4,24 @@ import numpy as np
 import random
 
 from src.mcts_agent import MCTSAgent
-from src.environment import RookKingEnv
+from src.environment import ChessEnv
 
 
-def train_agent():
-    env = RookKingEnv(stage=2,demo_mode=False)
-    state_size = (8 , 8 , 3)  # 8x8 board with 3 channels
-    agent = MCTSAgent(state_size)
-    batch_size = 800
-    episodes = 500
+import argparse
+
+def train_agent(start_fen=None):
+    # Training parameters
+    n_episodes = 1000
+    n_simulations = 50  # Increased for full chess
+    batch_size = 100
+    epochs = 1 
+
+    # Initialize environment and agent
+    env = ChessEnv(demo_mode=False)
+    state_size = (8 , 8 , 12)  # 8x8 board with 12 channels
+    agent = MCTSAgent(state_size=state_size, n_simulations=n_simulations)
+    
+    episodes = n_episodes
     target_update_frequency = 2
     checkpoint_frequency = 1
 
@@ -23,13 +32,19 @@ def train_agent():
 
     if os.path.exists(model_file):
         print(f"Loading model from {model_file}")
-        agent.load(model_file)
+        try:
+            agent.load(model_file)
+        except Exception as e:
+            print(f"Could not load model: {e}")
+            print("Starting with random weights.")
     else:
         print("No model found, training a new one.")
 
 
     for e in range(episodes):
-        env.reset()
+        # Reset to specific FEN if provided, otherwise standard start (or random moves if implemented)
+        env.reset(fen=start_fen)
+        
         moves_made = 0
         game_samples = []  # list of (state, improved_policy, player_color)
 
@@ -97,9 +112,27 @@ def train_agent():
         if e % target_update_frequency == 0:
             agent.update_target_model()
 
-            
-
     return agent
 
 if __name__ == "__main__":
-    agent = train_agent()
+    parser = argparse.ArgumentParser(description='Train Chess MCTS Agent')
+    parser.add_argument('--fen', type=str, help='Starting FEN string')
+    parser.add_argument('--pgn', type=str, help='Path to PGN file to load starting position from')
+    
+    args = parser.parse_args()
+    
+    start_fen = args.fen
+    
+    if args.pgn:
+        with open(args.pgn) as f:
+            game = chess.pgn.read_game(f)
+            if game:
+                board = game.board()
+                for move in game.mainline_moves():
+                    board.push(move)
+                start_fen = board.fen()
+                print(f"Loaded position from PGN: {start_fen}")
+            else:
+                print("Could not read PGN file.")
+
+    agent = train_agent(start_fen=start_fen)
