@@ -10,7 +10,7 @@ class RookKingEnv:
     def __init__(self, stage=1,demo_mode=False):
         self.stage = stage
         self.board = chess.Board()
-        self.engine = chess.engine.SimpleEngine.popen_uci("/usr/bin/stockfish")
+        self.engine = chess.engine.SimpleEngine.popen_uci("/usr/games/stockfish")
         self.engine.configure({"Skill Level": 20})
         self.mates = 0
         self.steps = 0
@@ -334,3 +334,25 @@ class RookKingEnv:
 
     def get_legal_actions(self):
         return list(self.board.legal_moves)
+
+    def step_with_opponent(self, action):
+        state, reward, done = self.step(action)
+
+        if not done:
+            self.oponent_step()
+
+        # After Stockfish reply, check terminal
+        if self.board.is_game_over():
+            result = self.board.result(claim_draw=True)
+
+            if result == "1-0":         # white mates
+                reward = 150.0
+            elif result == "1/2-1/2":   # stalemate/draw
+                reward = -50.0
+            else:
+                reward = -150.0         # should not happen in KRK
+
+            self.done = True
+
+        return self.get_state(), reward, self.done
+
