@@ -1,8 +1,6 @@
 import chess
-import chess.engine
 import numpy as np
 import random
-import chess
 
 from src.chess_renderer import ChessRenderer
 
@@ -10,8 +8,6 @@ class RookKingEnv:
     def __init__(self, stage=1,demo_mode=False):
         self.stage = stage
         self.board = chess.Board()
-        self.engine = chess.engine.SimpleEngine.popen_uci("/usr/bin/stockfish")
-        self.engine.configure({"Skill Level": 20})
         self.mates = 0
         self.steps = 0
         self.demo_mode = demo_mode
@@ -272,87 +268,22 @@ class RookKingEnv:
 
         if self.demo_mode:
           self.renderer.render_board(self.board)
-        reward = -0.5
+        
+        reward = 0.0
+        self.done = False
 
-        # reward structure
         if self.board.is_checkmate():
-            print("checkmate!!!!!!!!!")
-            reward = 150.0
+            # The player who just moved delivered checkmate
+            reward = 1.0
             self.mates += 1
             self.done = True
-        elif self.board.is_stalemate() or self.board.is_game_over():
-            reward = -100.0
-            self.done = True
-        if self.board.is_insufficient_material():
-            reward = -180.0
+        elif self.board.is_stalemate() or self.board.is_game_over() or self.board.is_insufficient_material():
+            # Draw
+            reward = 0.0
             self.done = True
 
         return self.get_state(), reward, self.done
-    
-    def oponent_step(self):
-        if not self.done:
-            self.opponent_move()
-            if self.board.is_stalemate() or self.board.is_game_over():
-                self.done = True
-
-    def calculate_position_reward(self):
-        reward = -20.0
-        black_king_square = self.board.king(chess.BLACK)
-        white_king_square = self.board.king(chess.WHITE)
-        rook_squares = self.board.pieces(chess.ROOK, chess.WHITE)
-
-        # Reward for restricting black king's mobility
-        black_king_moves = sum(1 for _ in self.board.legal_moves)
-        reward -= black_king_moves * 1
-
-        # Reward for keeping the black king near the edge
-        rank = chess.square_rank(black_king_square)
-        file = chess.square_file(black_king_square)
-        distance_from_center = abs(3.5 - rank) + abs(3.5 - file)
-        reward += distance_from_center
-
-        # Reward for keeping kings close
-        king_distance = chess.square_distance(black_king_square, white_king_square)
-        reward += (8 - king_distance)
-
-        for rook_square in rook_squares:
-          if self.board.is_attacked_by(chess.BLACK, rook_square):
-              if not self.board.is_attacked_by(chess.WHITE, rook_square):
-                  reward -= 10
-
-        return reward
-
-    def opponent_move(self):
-        if not self.board.is_game_over():
-            result = self.engine.play(self.board, chess.engine.Limit(time=1.0))
-            self.board.push(result.move)
-        else:
-          # self.render_board()
-          print("over")
-          return
-
 
     def get_legal_actions(self):
         return list(self.board.legal_moves)
-
-    def step_with_opponent(self, action):
-        state, reward, done = self.step(action)
-
-        if not done:
-            self.oponent_step()
-
-        # After Stockfish reply, check terminal
-        if self.board.is_game_over():
-            result = self.board.result(claim_draw=True)
-
-            if result == "1-0":         # white mates
-                reward = 150.0
-            elif result == "1/2-1/2":   # stalemate/draw
-                reward = -50.0
-            else:
-                reward = -150.0         # should not happen in KRK
-
-            self.done = True
-
-        return self.get_state(), reward, self.done
 

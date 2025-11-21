@@ -106,7 +106,8 @@ class MCTSAgent():
 
         for child in candidates:
             if child.visits > 0:
-                q = child.value / child.visits
+                # Value is from child's perspective (opponent), so negate for root
+                q = -child.value / child.visits
             else:
                 q = 0.0  # if never visited, treat as neutral
             # Eq. (8) style scaling: (c_visit + maxN) * c_scale * q
@@ -123,9 +124,9 @@ class MCTSAgent():
     def rollout_from_candidate(self, root, child, env, depth_limit=64):
         """
         One rollout:
-        - Force starting from root by playing 'child.move' (our move + Stockfish reply),
-          then follow deterministic non-root policy until leaf / terminal / depth_limit.
-        - Backup leaf value along the path.
+        - Play 'child.move' (1 ply).
+        - Follow deterministic non-root policy until leaf / terminal / depth_limit.
+        - Backup leaf value along the path (negating at each step).
         """
         path = [root, child]
 
@@ -133,17 +134,27 @@ class MCTSAgent():
         baseline = len(env.board.move_stack)
 
         if child.move not in env.board.legal_moves:
-            # print("Skip illegal child in rollout:", child.move)
             return
 
-        # 1) Apply the candidate move from the root + Stockfish reply
-        _, _, done = env.step_with_opponent(child.move)
+        # 1) Apply the candidate move (1 ply)
+        _, reward, done = env.step(child.move)
 
         node = child
         depth = 1
+        
+        leaf_value = 0.0
+
+        # If move caused termination (e.g. mate), reward is for the player who moved (child)
+        if done:
+             leaf_value = reward
+             backup_path(path, leaf_value)
+             env.go_back(baseline)
+             return
 
         # Expand child once if needed
         if not node.expanded:
+            # expand_leaf returns value for the current player (who is about to move from node)
+            # i.e. the player at 'node'.
             leaf_value = node.expand_leaf(env, self.model)
             backup_path(path, leaf_value)
             env.go_back(baseline)
@@ -167,23 +178,18 @@ class MCTSAgent():
                 # print("Skip illegal next_child in rollout:", next_child.move)
                 break
 
-            # Play that move + Stockfish reply
-            _, _, done = env.step_with_opponent(next_child.move)
+            # Play that move
+            _, reward, done = env.step(next_child.move)
             node = next_child
             depth += 1
+            
+            if done:
+                leaf_value = reward
+                break
 
         # 3) Terminal handling or depth limit
-        if env.done:
-            result = env.board.result(claim_draw=True)
-            if result == "1-0":         # white mates (good)
-                leaf_value = 1.0
-            elif result == "1/2-1/2":   # stalemate / draw
-                leaf_value = 0.0
-            else:
-                leaf_value = -1.0       # "0-1" should never happen, treat as worst
-
-        else:
-            # Depth limit hit but game not over: evaluate with value head
+        if not done:
+             # Depth limit hit but game not over: evaluate with value head
             leaf_value = node.expand_leaf(env, self.model)
 
         backup_path(path, leaf_value)
@@ -216,7 +222,8 @@ class MCTSAgent():
         visits = []
         for move, child in root.children.items():
             if child.visits > 0:
-                q_val = child.value / child.visits
+                # Negate for root perspective
+                q_val = -child.value / child.visits
             else:
                 q_val = v_pi
             Q[move] = q_val
@@ -292,7 +299,8 @@ class MCTSAgent():
 
         # Choose best candidate by mean action-value Q = value / visits
         def mean_q(child):
-            return child.value / child.visits if child.visits > 0 else -1e9
+            # Negate for root perspective
+            return -child.value / child.visits if child.visits > 0 else -1e9
 
         best_child = max(current_candidates, key=mean_q)
 

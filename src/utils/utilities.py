@@ -56,6 +56,7 @@ def backup_path(path, leaf_value):
     for n in reversed(path):
         n.visits += 1
         n.value += v
+        v = -v
 
 
 

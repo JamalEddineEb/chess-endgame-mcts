@@ -11,7 +11,7 @@ def train_agent():
     env = RookKingEnv(stage=2,demo_mode=False)
     state_size = (8 , 8 , 3)  # 8x8 board with 3 channels
     agent = MCTSAgent(state_size)
-    batch_size = 10
+    batch_size = 800
     episodes = 500
     target_update_frequency = 2
     checkpoint_frequency = 1
@@ -30,9 +30,8 @@ def train_agent():
 
     for e in range(episodes):
         env.reset()
-        total_reward = 0.0
         moves_made = 0
-        game_samples = []  # list of (state, improved_policy)
+        game_samples = []  # list of (state, improved_policy, player_color)
 
         print("episode ", e)
 
@@ -40,6 +39,7 @@ def train_agent():
 
         while not env.done and moves_made < max_moves:
             state = env.get_state()
+            current_player = env.board.turn
 
             # Run search at the root
             move, improved_policy, v_pi = agent.simulate(env)
@@ -48,12 +48,11 @@ def train_agent():
                 # No legal moves
                 break
 
-            # Store (s, π′) for this position
-            game_samples.append((state, improved_policy))
+            # Store (s, π′, player) for this position
+            game_samples.append((state, improved_policy, current_player))
 
-            # Play move in real environment vs Stockfish
-            _, reward, done = env.step_with_opponent(move)
-            total_reward += reward
+            # Play move
+            _, reward, done = env.step(move)
             moves_made += 1
 
             print(f"Move {moves_made}: {move}, done={done}")
@@ -62,26 +61,31 @@ def train_agent():
         # ----- game finished or max_moves reached -----
         # Use final game result as value target z
         result = env.board.result(claim_draw=True)  # "1-0","0-1","1/2-1/2","*"
+        
+        z_white = 0.0
         if result == "1-0":
-            z = 1.0   # we beat Stockfish
+            z_white = 1.0
         elif result == "0-1":
-            z = -1.0  # we lost
+            z_white = -1.0
         elif result == "1/2-1/2":
-            z = 0.0   # draw / stalemate
+            z_white = 0.0
         else:
-            # game truncated by move limit: treat as failed win vs Stockfish
-            z = -0.5
+            # game truncated or unknown
+            z_white = 0.0
 
         # Push all (state, π′, z) into replay memory
-        for s, pi in game_samples:
+        for s, pi, player in game_samples:
+            if player == chess.WHITE:
+                z = z_white
+            else:
+                z = -z_white
             agent.memory.append((s, pi, z))
 
         print(
             f"Episode: {e}/{episodes}, "
-            f"Score (sum of rewards): {total_reward}, "
             f"moves: {moves_made}, "
             f"mates: {env.mates}/{e+1}, "
-            f"final result: {result}, z={z}"
+            f"final result: {result}"
         )
 
         # --- TRAINING STEP -----------------------------------------
