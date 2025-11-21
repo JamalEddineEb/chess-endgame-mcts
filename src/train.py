@@ -1,15 +1,17 @@
 import os
+import chess
+import numpy as np
+import random
 
 from src.mcts_agent import MCTSAgent
 from src.environment import RookKingEnv
-from src.chess_renderer import ChessRenderer
+
 
 def train_agent():
     env = RookKingEnv(stage=2,demo_mode=False)
-    chess_renderer = ChessRenderer()
-    state_size = 8 * 8 * 3  # 8x8 board with 3 channels
+    state_size = (8 , 8 , 3)  # 8x8 board with 3 channels
     agent = MCTSAgent(state_size)
-    batch_size = 600
+    batch_size = 10
     episodes = 500
     target_update_frequency = 2
     checkpoint_frequency = 1
@@ -28,42 +30,69 @@ def train_agent():
 
     for e in range(episodes):
         env.reset()
-        chess_renderer.render_board(env.board)
-        total_reward = 0
+        total_reward = 0.0
         moves_made = 0
-        print("episode ",e)
+        game_samples = []  # list of (state, improved_policy)
 
-        while True:
-            action = agent.act(env)
-            print("real one")
-            chess_renderer.render_board(env.board)
+        print("episode ", e)
+
+        max_moves = 50  # prevent endless shuffling
+
+        while not env.done and moves_made < max_moves:
             state = env.get_state()
-            next_state, reward, done = env.step(action)
-            print(state==next_state)
 
-            agent.remember(state, action, reward, next_state, done)
-            total_reward += reward
-            moves_made += 1
-            chess_renderer.render_board(env.board)
+            # Run search at the root
+            move, improved_policy, v_pi = agent.simulate(env)
 
-            print(moves_made,"moves made\n\n\n")
-
-            if done or moves_made > 5:  # Prevent infinite games
-                print(f"Episode: {e}/{episodes}, Score: {total_reward}, epsilon: {agent.epsilon}")
-                print("mates : ",env.mates,"/",e+1)
-
+            if move is None:
+                # No legal moves
                 break
 
-            print(e%checkpoint_frequency)
+            # Store (s, π′) for this position
+            game_samples.append((state, improved_policy))
 
-            if e % checkpoint_frequency == 0:
-                agent.replay(batch_size)
-                agent.save(model_file)
-            # env.render_board()
+            # Play move in real environment vs Stockfish
+            _, reward, done = env.step_with_opponent(move)
+            total_reward += reward
+            moves_made += 1
 
-            # Update target network periodically
-            if e % target_update_frequency == 0:
-                agent.update_target_model()
+            print(f"Move {moves_made}: {move}, done={done}")
+            print(env.board.unicode())
+
+        # ----- game finished or max_moves reached -----
+        # Use final game result as value target z
+        result = env.board.result(claim_draw=True)  # "1-0","0-1","1/2-1/2","*"
+        if result == "1-0":
+            z = 1.0   # we beat Stockfish
+        elif result == "0-1":
+            z = -1.0  # we lost
+        elif result == "1/2-1/2":
+            z = 0.0   # draw / stalemate
+        else:
+            # game truncated by move limit: treat as failed win vs Stockfish
+            z = -0.5
+
+        # Push all (state, π′, z) into replay memory
+        for s, pi in game_samples:
+            agent.memory.append((s, pi, z))
+
+        print(
+            f"Episode: {e}/{episodes}, "
+            f"Score (sum of rewards): {total_reward}, "
+            f"moves: {moves_made}, "
+            f"mates: {env.mates}/{e+1}, "
+            f"final result: {result}, z={z}"
+        )
+
+        # --- TRAINING STEP -----------------------------------------
+        if len(agent.memory) >= batch_size:
+            agent.replay(batch_size)
+            agent.save(model_file)
+
+        # Update target network periodically (optional)
+        if e % target_update_frequency == 0:
+            agent.update_target_model()
+
             
 
     return agent

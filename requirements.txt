@@ -1,7 +1,6 @@
-cairosvg
-chess
-ipython
-keras
-memory_profiler
-numpy
-tensorflow
+chess==1.11.2
+keras==3.11.3
+numpy==2.3.5
+PyQt5==5.15.11
+pyqt5_sip==12.17.1
+tensorflow==2.20.0

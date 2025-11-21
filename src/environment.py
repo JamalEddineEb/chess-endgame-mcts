@@ -257,6 +257,7 @@ class RookKingEnv:
         return state
 
     def go_back(self, baseline):
+        self.done = False
         while len(self.board.move_stack)>baseline:
             self.board.pop()
 
@@ -264,6 +265,7 @@ class RookKingEnv:
     def step(self, action):
         if action not in self.board.legal_moves:
             print("wrong move : ", action)
+            print(self.board.unicode())
             return self.get_state(), -10, True
 
         self.board.push(action)
@@ -272,7 +274,7 @@ class RookKingEnv:
           self.renderer.render_board(self.board)
         reward = -0.5
 
-        # More nuanced reward structure
+        # reward structure
         if self.board.is_checkmate():
             print("checkmate!!!!!!!!!")
             reward = 150.0
@@ -332,3 +334,25 @@ class RookKingEnv:
 
     def get_legal_actions(self):
         return list(self.board.legal_moves)
+
+    def step_with_opponent(self, action):
+        state, reward, done = self.step(action)
+
+        if not done:
+            self.oponent_step()
+
+        # After Stockfish reply, check terminal
+        if self.board.is_game_over():
+            result = self.board.result(claim_draw=True)
+
+            if result == "1-0":         # white mates
+                reward = 150.0
+            elif result == "1/2-1/2":   # stalemate/draw
+                reward = -50.0
+            else:
+                reward = -150.0         # should not happen in KRK
+
+            self.done = True
+
+        return self.get_state(), reward, self.done
+
