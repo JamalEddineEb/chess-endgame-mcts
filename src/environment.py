@@ -74,8 +74,8 @@ class ChessEnv:
         if self.board.is_checkmate():
             reward = 1.0
             self.mates += 1
-            print("mateee")
             self.done = True
+
         elif self.board.is_stalemate() or self.board.is_game_over() or self.board.is_insufficient_material():
             reward = 0.0
             self.done = True
@@ -83,7 +83,7 @@ class ChessEnv:
             # 50-move rule or 3-fold repetition
             reward = 0.0
             self.done = True
-
+        
         return self.get_state(), reward, self.done
 
     def get_legal_actions(self):

@@ -10,7 +10,7 @@ from src.utils.move_mapping import MoveMapping
 
 
 class MCTSAgent():
-    def __init__(self, state_size, n_simulations=20):
+    def __init__(self, state_size, n_simulations=100):
         self.state_size = state_size
         self.memory = deque(maxlen=10000)
         self.n_simulations = n_simulations
@@ -261,7 +261,7 @@ class MCTSAgent():
 
         return improved_policy, v_pi
 
-    def simulate(self, env, k_root=4):
+    def simulate(self, env, k_root=8):
         """"
         Run Gumbel-style root search and return:
         - best_move: chess.Move
@@ -352,7 +352,7 @@ class MCTSAgent():
         self.model.fit(
             states,
             [targets_pi, targets_v],
-            epochs=3,
+            epochs=30,
             verbose=1,
         )
 

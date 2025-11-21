@@ -6,15 +6,13 @@ import random
 from src.mcts_agent import MCTSAgent
 from src.environment import ChessEnv
 
-
 import argparse
 
 def train_agent(start_fen=None):
     # Training parameters
     n_episodes = 1000
-    n_simulations = 50  # Increased for full chess
-    batch_size = 100
-    epochs = 1 
+    n_simulations = 50  
+    batch_size = 500
 
     # Initialize environment and agent
     env = ChessEnv(demo_mode=False)
@@ -87,6 +85,7 @@ def train_agent(start_fen=None):
         else:
             # game truncated or unknown
             z_white = 0.0
+        print("z_white", z_white)
 
         # Push all (state, π′, z) into replay memory
         for s, pi, player in game_samples:
