@@ -27,39 +27,56 @@ class MCTSAgent():
         self.update_target_model()
 
     def _build_model(self):
-        # Input layer for an 8x8 chessboard with 12 channels (one for each piece type per color)
+        # Input layer for an 8x8 chessboard with 12 channels
         input_layer = layers.Input(shape=(8, 8, 12))
 
-        # Convolutional Block 1
-        x = layers.Conv2D(filters=128, kernel_size=(3, 3), activation='relu', padding='same')(input_layer)
+        # Initial Convolution
+        x = layers.Conv2D(filters=64, kernel_size=(3, 3), padding='same')(input_layer)
         x = layers.BatchNormalization()(x)
-        x = layers.Conv2D(filters=128, kernel_size=(3, 3), activation='relu', padding='same')(x)
-        x = layers.BatchNormalization()(x)
-        x = layers.MaxPooling2D(pool_size=(2, 2))(x)
-        
-        # Convolutional Block 2
-        x = layers.Conv2D(filters=256, kernel_size=(3, 3), activation='relu', padding='same')(x)
-        x = layers.BatchNormalization()(x)
-        x = layers.Conv2D(filters=256, kernel_size=(3, 3), activation='relu', padding='same')(x)
-        x = layers.BatchNormalization()(x)
-        x = layers.MaxPooling2D(pool_size=(2, 2))(x)
+        x = layers.Activation('relu')(x)
 
+        # Residual Blocks (AlphaZero uses 19 or 39, we'll start with 4 for speed)
+        for _ in range(4):
+            x = self._residual_block(x, filters=64)
 
-        # Flatten the output from the convolutional layers
-        x = layers.Flatten()(x)
+        # Policy Head
+        p = layers.Conv2D(filters=2, kernel_size=(1, 1), padding='same')(x)
+        p = layers.BatchNormalization()(p)
+        p = layers.Activation('relu')(p)
+        p = layers.Flatten()(p)
+        policy_output = layers.Dense(self.move_mapping.num_actions, activation='softmax', name='policy')(p)
 
-        # Policy head for move selection 
-        # Output size matches the global move mapping (including promotions)
-        policy_output = layers.Dense(self.move_mapping.num_actions, activation='softmax', name='policy')(x)
+        # Value Head
+        v = layers.Conv2D(filters=1, kernel_size=(1, 1), padding='same')(x)
+        v = layers.BatchNormalization()(v)
+        v = layers.Activation('relu')(v)
+        v = layers.Flatten()(v)
+        v = layers.Dense(64, activation='relu')(v)
+        value_output = layers.Dense(1, activation='tanh', name='value')(v)
 
-        # Value head for estimating the value of the current board state
-        value_output = layers.Dense(1, activation='tanh', name='value')(x)
-
-        # Create the model with both policy and value heads
+        # Create the model
         model = models.Model(inputs=input_layer, outputs=[policy_output, value_output])
         model.compile(optimizer='adam', loss=['categorical_crossentropy', 'mean_squared_error'], metrics=['accuracy','accuracy'])
 
         return model
+
+    def _residual_block(self, x, filters):
+        shortcut = x
+        
+        # First Conv
+        x = layers.Conv2D(filters=filters, kernel_size=(3, 3), padding='same')(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+        
+        # Second Conv
+        x = layers.Conv2D(filters=filters, kernel_size=(3, 3), padding='same')(x)
+        x = layers.BatchNormalization()(x)
+        
+        # Add Skip Connection
+        x = layers.Add()([x, shortcut])
+        x = layers.Activation('relu')(x)
+        
+        return x
 
     def update_target_model(self):
         self.target_model.set_weights(self.model.get_weights())
@@ -148,9 +165,10 @@ class MCTSAgent():
         
         leaf_value = 0.0
 
-        # If move caused termination (e.g. mate), reward is for the player who moved (child)
+        # If move caused termination (e.g. mate), reward is from parent's perspective
+        # But backup_path expects value from child's perspective, so negate
         if done:
-             leaf_value = reward
+             leaf_value = -reward  # Negate: reward is from parent, child is opponent
              backup_path(path, leaf_value)
              env.go_back(baseline)
              return
@@ -188,7 +206,9 @@ class MCTSAgent():
             depth += 1
             
             if done:
-                leaf_value = reward
+                # reward is from the player who just moved perspective
+                # Need to convert to last node's perspective (negate)
+                leaf_value = -reward
                 break
 
         # 3) Terminal handling or depth limit
@@ -205,11 +225,9 @@ class MCTSAgent():
     def compute_policy_improvement(self, root, state):
 
         # Step 1: get raw logits + value head vπ
-        # --- FIX: convert policy probabilities -> pseudo-logits ---
-
-        policy_probs, v_pi = self.model.predict(state[None], verbose=0)
-        policy_probs = policy_probs[0]     # shape = (4096,)
-        v_pi = float(v_pi[0])
+        policy_probs, v_pi = self.model(state[None], training=False)
+        policy_probs = policy_probs.numpy()[0]     # shape = (4096,)
+        v_pi = float(v_pi.numpy()[0])
 
         # numerical safety
         eps = 1e-8

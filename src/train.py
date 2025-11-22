@@ -1,7 +1,8 @@
+import random
+from collections import deque
 import os
 import chess
 import numpy as np
-import random
 
 from src.mcts_agent import MCTSAgent
 from src.environment import ChessEnv
@@ -11,17 +12,18 @@ import argparse
 def train_agent(start_fen=None):
     # Training parameters
     n_episodes = 1000
-    n_simulations = 50  
-    batch_size = 500
+    n_simulations = 500
+    batch_size = 200
 
     # Initialize environment and agent
     env = ChessEnv(demo_mode=False)
     state_size = (8 , 8 , 12)  # 8x8 board with 12 channels
+    mates = 0
     agent = MCTSAgent(state_size=state_size, n_simulations=n_simulations)
     
     episodes = n_episodes
     target_update_frequency = 2
-    checkpoint_frequency = 1
+    checkpoint_frequency = 5
 
     import tensorflow as tf
     print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
@@ -39,14 +41,17 @@ def train_agent(start_fen=None):
         print("No model found, training a new one.")
 
 
+    difficulty = 0  # Start at Easy
+    recent_results = deque(maxlen=100) # Track last 100 games for win rate
+
     for e in range(episodes):
-        # Reset to specific FEN if provided, otherwise standard start (or random moves if implemented)
-        env.reset(fen=start_fen)
+        # Reset with current difficulty (unless FEN is provided)
+        env.reset(fen=start_fen, difficulty=difficulty if not start_fen else None)
         
         moves_made = 0
         game_samples = []  # list of (state, improved_policy, player_color)
 
-        print("episode ", e)
+        print(f"episode {e}, difficulty {difficulty}")
 
         max_moves = 50  # prevent endless shuffling
 
@@ -67,6 +72,7 @@ def train_agent(start_fen=None):
             # Play move
             _, reward, done = env.step(move)
             moves_made += 1
+            mates += reward
 
             print(f"Move {moves_made}: {move}, done={done}")
             print(env.board.unicode())
@@ -78,13 +84,18 @@ def train_agent(start_fen=None):
         z_white = 0.0
         if result == "1-0":
             z_white = 1.0
+            recent_results.append(1) # Win for White
         elif result == "0-1":
             z_white = -1.0
+            recent_results.append(0) # Loss for White (shouldn't happen in QK vs K)
         elif result == "1/2-1/2":
             z_white = 0.0
+            recent_results.append(0) # Draw
         else:
             # game truncated or unknown
             z_white = 0.0
+            recent_results.append(0)
+
         print("z_white", z_white)
 
         # Push all (state, π′, z) into replay memory
@@ -95,15 +106,24 @@ def train_agent(start_fen=None):
                 z = -z_white
             agent.memory.append((s, pi, z))
 
+        # Curriculum Update
+        if len(recent_results) >= 50:
+            win_rate = sum(recent_results) / len(recent_results)
+            print(f"Recent Win Rate: {win_rate:.2f}")
+            if win_rate > 0.75 and difficulty < 2:
+                difficulty += 1
+                recent_results.clear() # Reset stats for new difficulty
+                print(f"*** INCREASING DIFFICULTY TO {difficulty} ***")
+
         print(
             f"Episode: {e}/{episodes}, "
             f"moves: {moves_made}, "
-            f"mates: {env.mates}/{e+1}, "
+            f"mates: {mates}/{e+1}, "
             f"final result: {result}"
         )
 
         # --- TRAINING STEP -----------------------------------------
-        if len(agent.memory) >= batch_size:
+        if len(agent.memory) >= batch_size and e%checkpoint_frequency==0:
             agent.replay(batch_size)
             agent.save(model_file)
 
